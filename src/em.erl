@@ -2,7 +2,7 @@
 %%% @author Sven Heyll <sven.heyll@lindenbaum.eu>
 %%% @doc
 %%% 'em' stands for 'Early Mock'.
-%%% A mocking library that works similar to easymock. Code for modules 
+%%% A mocking library that works similar to easymock. Code for modules
 %%% that should be mocked is created and loaded on the fly.
 %%% @end
 %%% @copyright (C) 2011, Sven Heyll
@@ -37,7 +37,7 @@
                              true | false)
                      | term()].
 
--type answer() :: {function, fun(([any()]) -> any())} 
+-type answer() :: {function, fun(([any()]) -> any())}
                   | {return, any()} .
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -54,7 +54,7 @@ any() ->
 
 -spec new() ->
                  pid().
-new() ->    
+new() ->
     {ok, Pid} = gen_fsm:start_link(?MODULE, [], []),
     Pid.
 
@@ -66,7 +66,7 @@ strict(M, Mod, Fun, Args)
 
 -spec strict(pid(), atom(), atom(), args(), answer()) ->
                     ok.
-strict(M, Mod, Fun, Args, Answer = {return, _}) 
+strict(M, Mod, Fun, Args, Answer = {return, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
     ok = gen_fsm:sync_send_event(M, {strict, Mod, Fun, Args, Answer});
 strict(M, Mod, Fun, Args, Answer = {function, _})
@@ -81,10 +81,10 @@ stub(M, Mod, Fun, Args)
 
 -spec stub(pid(), atom(), atom(), args(), answer()) ->
                   ok.
-stub(M, Mod, Fun, Args, Answer = {return, _}) 
+stub(M, Mod, Fun, Args, Answer = {return, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
     ok = gen_fsm:sync_send_event(M, {stub, Mod, Fun, Args, Answer});
-stub(M, Mod, Fun, Args, Answer = {function, _}) 
+stub(M, Mod, Fun, Args, Answer = {function, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
     ok = gen_fsm:sync_send_event(M, {stub, Mod, Fun, Args, Answer}).
 
@@ -98,97 +98,100 @@ verify(M) ->
 %%%% internal state
 %%
 
--record(expectation, 
-        {m :: atom(), 
-         f :: atom(), 
-         a :: args(), 
+-record(expectation,
+        {m :: atom(),
+         f :: atom(),
+         a :: args(),
          answer :: answer()}).
 
 -record(state, {
           strict :: [#expectation{}],
           stub  :: [#expectation{}],
-          mocked_modules :: [atom()]
+          mocked_modules :: [{atom(), {just, term()}|nothing}]
          }).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% gen_fsm callbacks
 %%
 init([]) ->
- %   process_flag(trap_exit, true),
-    {ok, 
-     programming, 
+    dbg:tracer(),
+    dbg:p(self(), [call,m]),
+    dbg:tp(code, []),
+    dbg:tp(ets, []),
+    {ok,
+     programming,
      #state{
-       strict = [], 
+       strict = [],
        stub = [],
        mocked_modules = []}}.
 
 
-programming({strict, Mod, Fun, Args, Answer}, 
-            _From, 
+programming({strict, Mod, Fun, Args, Answer},
+            _From,
             State = #state{strict = Strict}) ->
-    {reply, 
-     ok, 
-     programming, 
+    {reply,
+     ok,
+     programming,
      State#state{
        strict = [#expectation{m = Mod, f = Fun, a = Args, answer = Answer}|Strict]}};
-    
-programming({stub, Mod, Fun, Args, Answer}, 
-            _From, 
+
+programming({stub, Mod, Fun, Args, Answer},
+            _From,
             State = #state{stub = Stub}) ->
-    {reply, 
-     ok, 
-     programming, 
+    {reply,
+     ok,
+     programming,
      State#state{
        stub = [#expectation{m = Mod, f = Fun, a = Args, answer = Answer}|Stub]}};
-    
-programming(replay, 
-            _From, 
+
+programming(replay,
+            _From,
             State = #state{strict = Strict}) ->
     MMs = install_mock_modules(State),
-    {reply, 
-     ok, 
+    {reply,
+     ok,
      case Strict of
          [] -> no_expectations;
          _ -> replaying
-     end, 
+     end,
      State#state{
-       strict = lists:reverse(Strict),       
+       strict = lists:reverse(Strict),
        mocked_modules = MMs}}.
 
-replaying(I = {invokation, Mod, Fun, Args}, 
-          _From, 
+replaying(I = {invokation, Mod, Fun, Args},
+          _From,
           State = #state{
             strict = [#expectation{
-                        m      = Mod, 
-                        f      = Fun, 
-                        a      = EArgs, 
+                        m      = Mod,
+                        f      = Fun,
+                        a      = EArgs,
                         answer = Answer}
                       |Rest]})
   when length(EArgs) == length(Args) ->
     case check_args(Args, EArgs) of
         true ->
-            {reply, 
-             Answer, 
+            {reply,
+             Answer,
              case Rest of
                  [] -> no_expectations;
                  _ -> replaying
-             end, 
+             end,
              State#state{strict=Rest}};
         {error, {PIndex, PValue}} ->
-            Reason = {unexpected_function_parameter, 
-                      {parameter, PIndex, PValue}, 
+            Reason = {unexpected_function_parameter,
+                      {parameter, PIndex, PValue},
                       {invokation, I}},
             {stop, Reason, Reason, State}
     end;
 
-replaying(I = {invokation, _M, _F, _A}, 
-          _From, 
+replaying(I = {invokation, _M, _F, _A},
+          _From,
           State = #state{strict = [E|_]}) ->
     case handle_stub_invokation(I, State#state.stub) of
         {ok, Answer} ->
             {reply, Answer, replaying, State};
 
-        error ->            
+        error ->
             Reason = {unexpected_invokation, {actual, I}, {expected, E}},
             {stop, Reason, Reason, State}
     end;
@@ -208,14 +211,14 @@ no_expectations(I = {invokation, _M, _F, _A}, _From, State) ->
             Reason = {unexpected_invokation, {actual, I}},
             {stop, Reason, Reason, State}
     end;
-        
+
 no_expectations(verify,
          _From,
          State) ->
     {stop, normal, ok, State}.
 
 terminate(_Reason, _StateName, State) ->
-    unload_modules(State).
+    unload_mock_modules(State).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% api for generated mock code
@@ -232,23 +235,30 @@ invoke(M, Mod, Fun, Args) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% internal functions
 %%
-unload_modules(#state{mocked_modules = MMs}) ->
+unload_mock_modules(#state{mocked_modules = MMs}) ->
     [begin
          code:delete(Mod),
-         code:purge(Mod)         
-     end || Mod <- MMs].
+         code:purge(Mod),
+         case MaybeBin of
+             nothing ->
+                 ignore;
+             {just, CoverCompiledBinary} ->
+                 code:load_binary(Mod, cover_compiled, CoverCompiledBinary)
+         end
+     end
+     || {Mod, MaybeBin} <- MMs].
 
 install_mock_modules(#state{strict = ExpectationsStrict,
                             stub = ExpectationsStub}) ->
     Expectations = ExpectationsStub ++ ExpectationsStrict,
     ModulesToMock = lists:usort([M || #expectation{m = M} <- Expectations]),
-    [install_mock_module(M, Expectations) || M <- ModulesToMock],
-    ModulesToMock.
+    [install_mock_module(M, Expectations) || M <- ModulesToMock].
 
 install_mock_module(Mod, Expectations) ->
-    ModHeaderSyn = [erl_syntax:attribute(erl_syntax:atom(module), 
+    MaybeBin = get_cover_compiled_binary(Mod),
+    ModHeaderSyn = [erl_syntax:attribute(erl_syntax:atom(module),
                                       [erl_syntax:atom(Mod)]),
-                    erl_syntax:attribute(erl_syntax:atom(compile), 
+                    erl_syntax:attribute(erl_syntax:atom(compile),
                                          [erl_syntax:list(
                                             [erl_syntax:atom(export_all)])])],
     Funs = lists:usort(
@@ -256,13 +266,14 @@ install_mock_module(Mod, Expectations) ->
                                 M == Mod]),
     FunFormsSyn = [mock_fun_syn(Mod, F, A) || {F, A} <- Funs],
 
-    {ok, Mod, Code} = 
-        compile:forms([erl_syntax:revert(F) 
+    {ok, Mod, Code} =
+        compile:forms([erl_syntax:revert(F)
                        || F <- ModHeaderSyn ++ FunFormsSyn]),
 
     code:delete(Mod),
     code:purge(Mod),
-    {module, _} = load_module(Mod, Code).
+    {module, _} = load_module(Mod, Code),
+    {Mod, MaybeBin}.
 
 
 mock_fun_syn(Mod, F, Args) ->
@@ -275,9 +286,9 @@ mock_fun_syn(Mod, F, Args) ->
                           body_syn(Mod, FunSyn, ArgsSyn))]).
 
 var_list_syn(Args) ->
-    [erl_syntax:variable(list_to_atom("Arg_" ++ integer_to_list(I))) 
+    [erl_syntax:variable(list_to_atom("Arg_" ++ integer_to_list(I)))
      || I <- lists:seq(0, Args - 1)].
-                        
+
 body_syn(Mod, FunSyn, ArgsSyn) ->
     SelfStr = pid_to_list(self()),
     SelfSyn = erl_syntax:application(
@@ -287,15 +298,15 @@ body_syn(Mod, FunSyn, ArgsSyn) ->
     [erl_syntax:application(
        erl_syntax:atom(?MODULE),
        erl_syntax:atom(invoke),
-       [SelfSyn,  
-        erl_syntax:atom(Mod), 
+       [SelfSyn,
+        erl_syntax:atom(Mod),
         FunSyn,
         erl_syntax:list(ArgsSyn)])].
 
 check_args(Args, ArgSpecs) ->
     try
-        [begin 
-             if 
+        [begin
+             if
                  is_function(E) ->
                      case E(A) of
                          true ->
@@ -303,26 +314,26 @@ check_args(Args, ArgSpecs) ->
                          _ ->
                              throw({error, {I, A}})
                      end;
-                 
+
                  A =/= E ->
                      throw({error, {expected, E}, {actual, A}});
 
                  A == E ->
                      ok
              end
-         end 
+         end
          || {I, A, E} <- lists:zip3(lists:seq(0, length(Args) - 1),
                                     Args,
                                     ArgSpecs)] of
         _ ->
             true
-    catch 
+    catch
         _:E ->
             E
     end.
-                 
+
 handle_stub_invokation({invokation, Mod, Fun, Args}, Stubs) ->
-    case [MatchingStub 
+    case [MatchingStub
           || MatchingStub = #expectation {m = M, f = F, a = A} <- Stubs,
              M == Mod, F == Fun, length(Args) == length(A),
              check_args(Args, A) == true] of
@@ -330,7 +341,26 @@ handle_stub_invokation({invokation, Mod, Fun, Args}, Stubs) ->
         [#expectation{answer = Answer}|_] ->
             {ok, Answer};
 
-        _ ->            
+        _ ->
             error
     end.
-    
+
+-spec get_cover_compiled_binary(atom()) ->
+                                       {just, term()} | nothing.
+get_cover_compiled_binary(Mod) ->
+    case code:which(Mod) of
+        cover_compiled ->
+            case ets:info(cover_binary_code_table) of
+                undefined ->
+                    nothing;
+                _ ->
+                    case ets:lookup(cover_binary_code_table, Mod) of
+                        [Binary] ->
+                            {just, Binary};
+                        _ ->
+                            nothing
+                    end
+            end;
+        _ ->
+            nothing
+    end.
