@@ -177,10 +177,12 @@ replaying(I = {invokation, Mod, Fun, Args},
                  _ -> replaying
              end,
              State#state{strict=Rest}};
-        {error, {PIndex, PValue}} ->
+        {error, Index, Expected, Actual} ->
             Reason = {unexpected_function_parameter,
-                      {parameter, PIndex, PValue},
-                      {invokation, I}},
+                      {error_in_parameter, Index},
+                      {expected, Expected},
+                      {actual, Actual},
+                      I},
             {stop, Reason, Reason, State}
     end;
 
@@ -312,17 +314,17 @@ check_args(Args, ArgSpecs) ->
                          true ->
                              ok;
                          _ ->
-                             throw({error, {I, A}})
+                             throw({error, I, E, A})
                      end;
 
                  A =/= E ->
-                     throw({error, {expected, E}, {actual, A}});
+                     throw({error, I, E, A});
 
                  A == E ->
                      ok
              end
          end
-         || {I, A, E} <- lists:zip3(lists:seq(0, length(Args) - 1),
+         || {I, A, E} <- lists:zip3(lists:seq(1, length(Args)),
                                     Args,
                                     ArgSpecs)] of
         _ ->
