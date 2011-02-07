@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuite failures="0" time="121" errors="0" skipped="0" tests="7" name="em.em_test">
+  <testcase time="93" classname="em.em_test" name="simple_strict_test0">
+  </testcase>
+  <testcase time="4" classname="em.em_test" name="strict_and_stub_test0">
+  </testcase>
+  <testcase time="1" classname="em.em_test" name="stub_only_test0">
+  </testcase>
+  <testcase time="1" classname="em.em_test" name="fun_answer_test0">
+  </testcase>
+  <testcase time="1" classname="em.em_test" name="empty_stub_test0">
+  </testcase>
+  <testcase time="0" classname="em.em_test" name="empty_test0">
+  </testcase>
+  <testcase time="0" classname="em.em_test" name="check_arguments_test0">
+  </testcase>
+</testsuite>
