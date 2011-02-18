@@ -1,4 +1,4 @@
-%%%-------------------------------------------------------------------
+%%%-----------------------------------------------------------------------------
 %%% @author Sven Heyll <sven.heyll@lindenbaum.eu>
 %%% @copyright (C) 2011, Sven Heyll
 %%% @doc
@@ -40,11 +40,34 @@
 %%% anyway.
 %%% 
 %%% @end
-%%%-------------------------------------------------------------------
+%%%-----------------------------------------------------------------------------
+%%% Copyright (c) 2011 Sven Heyll
+%%%
+%%% Permission is hereby granted, free of charge, to any person obtaining a copy
+%%% of this software and associated documentation files (the "Software"), to deal
+%%% in the Software without restriction, including without limitation the rights
+%%% to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+%%% copies of the Software, and to permit persons to whom the Software is
+%%% furnished to do so, subject to the following conditions:
+%%% 
+%%% The above copyright notice and this permission notice shall be included in
+%%% all copies or substantial portions of the Software.
+%%% 
+%%% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+%%% IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+%%% FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+%%% AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+%%% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+%%% OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+%%% THE SOFTWARE.
+%%% 
+%%%-----------------------------------------------------------------------------
+
 -module(em).
 
 -behaviour(gen_fsm).
 
+%% public API ---
 -export([new/0,
          strict/4,
          strict/5,
@@ -54,11 +77,16 @@
          verify/1,
          any/0]).
 
+%% gen_fsm callbacks ---
 -export([programming/3,
          replaying/3,
          no_expectations/3,
          terminate/3,
-         init/1]).
+         init/1,
+         code_change/4,
+         handle_event/3,
+         handle_info/3,
+         handle_sync_event/4]).
 
 %% !!!NEVER CALL THIS FUNCTION!!! ---
 -export([invoke/4]).
@@ -386,6 +414,30 @@ no_expectations(verify,
 %%------------------------------------------------------------------------------
 terminate(_Reason, _StateName, State) ->
     unload_mock_modules(State).
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+code_change(_OldVsn, StateName, State, _Extra) ->
+    {ok, StateName, State}.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+handle_sync_event(_Evt, _From, _StateName, State) ->
+    {stop, normal, ok, State}.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+handle_info(_Info, _StateName, State) ->
+    {stop, normal, State}.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+handle_event(_Msg, _StateName, State) ->
+    {stop, normal, State}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% api for generated mock code

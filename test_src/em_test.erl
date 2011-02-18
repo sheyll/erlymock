@@ -24,7 +24,69 @@ simple_strict_test() ->
     ok = some_mod:some_other_fun(a),
     ok2 = some_other_mod:some_other_fun(),
     em:verify(M).
-    
+
+invalid_parameter_1_test() ->
+    M = em:new(),
+    em:strict(M, some_mod, some_fun, [a, 
+                                         fun(B) ->
+                                                 B == b
+                                         end]),
+    em:replay(M),
+    process_flag(trap_exit, true),
+    ?assertError({case_clause, 
+                  {unexpected_function_parameter,
+                   {error_in_parameter, 1}, {expected, a}, {actual, 666},
+                   {invokation, some_mod, some_fun, [666, b]}}}, 
+                 some_mod:some_fun(666, b)).
+
+invalid_order_test() ->
+    M = em:new(),
+    em:strict(M, some_mod, some_fun, [a,b]),
+    em:strict(M, some_mod, some_fun, [a]),
+    em:replay(M),
+    process_flag(trap_exit, true),
+    ?assertError({case_clause,{unexpected_invokation,
+                               {actual,{invokation,some_mod,some_fun,[a]}},
+                               {expected,{expectation,some_mod,some_fun,[a,b],
+                                          {return,ok}}}}}, 
+                 some_mod:some_fun(a)).
+
+too_many_invokations_test() ->
+    M = em:new(),
+    em:strict(M, some_mod, some_fun, [a,b]),
+    em:replay(M),
+    ok = some_mod:some_fun(a, b),
+    process_flag(trap_exit, true),
+    ?assertError({case_clause,{unexpected_invokation,
+                               {actual,{invokation,some_mod,some_fun,[a, b]}}}}, 
+                 some_mod:some_fun(a, b)).
+
+invokations_missing_test() ->
+    M = em:new(),
+    em:strict(M, some_mod, some_fun, [a,b]),
+    em:replay(M),
+    process_flag(trap_exit, true),
+    ?assertError({badmatch,
+                  {invokations_missing,
+                   [{expectation,some_mod,some_fun,[a,b],{return,ok}}]}},
+                 em:verify(M)).
+
+invalid_parameter_2_test() ->
+    M = em:new(),
+    em:strict(M, some_mod, some_fun, [a, 
+                                         fun(B) ->
+                                                 B == b
+                                         end]),
+    em:replay(M),
+    process_flag(trap_exit, true),
+    ?assertMatch({'EXIT', {{case_clause, 
+                            {unexpected_function_parameter,
+                             {error_in_parameter, 2},
+                             {expected, _},
+                             {actual, 666},
+                             {invokation, some_mod, some_fun, [a, 666]}}}, _}}, 
+                 catch(some_mod:some_fun(a, 666))).
+
 strict_and_stub_test() ->
     M = em:new(),
     em:stub(M, some_modx, some_fun, [a, b, em:any()], {return, ok}),
@@ -40,10 +102,14 @@ strict_and_stub_test() ->
     
 stub_only_test() ->
     M = em:new(),
-    em:stub(M, some_modx, some_fun, [a, b, c], {return, ok}),
+    em:stub(M, some_modx, some_fun, [a, b, c], {return, ok123}),
+    em:stub(M, some_mody, some_fun, [a, b, c]),
+    em:stub(M, some_modz, some_fun, [a, b, c], {function, fun(_) -> well end}),
     em:replay(M),
-    ok = some_modx:some_fun(a, b, c),
-    ok = some_modx:some_fun(a, b, c),
+    well = some_modz:some_fun(a, b, c),
+    ok123 = some_modx:some_fun(a, b, c),
+    ok = some_mody:some_fun(a, b, c),
+    ok123 = some_modx:some_fun(a, b, c),
     em:verify(M).
    
 fun_answer_test() ->
@@ -73,3 +139,9 @@ check_arguments_test() ->
     ?assertException(error, function_clause, em:strict(M,x,y,[],{function1, also_bad})),
     em:replay(M),
     em:verify(M).
+
+gen_fsm_unimplemented_stops_test() ->
+    ?assertEqual({stop, normal, state}, em:handle_info(x, y, state)),
+    ?assertEqual({stop, normal, ok, state}, em:handle_sync_event(x, y, z, state)),
+    ?assertEqual({stop, normal, state}, em:handle_event(x, y, state)),
+    ?assertEqual({ok, state_name, state}, em:code_change(old_vsn, state_name, state, extra)).    

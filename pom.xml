@@ -6,6 +6,7 @@
   <packaging>erlang-std</packaging>
   <name>ErlyMock</name>
   <description>An EasyMock inspired mocking library for erlang.</description>
+  <url>https://github.com/sheyll/erlymock</url>
   <build>
     <plugins>
       <plugin>
@@ -30,5 +31,48 @@
       <url>${internalSnapshotsRepositoryUrl}</url>
     </snapshotRepository>
   </distributionManagement>
+
+  <scm>
+    <connection>scm:git:git@github.com:sheyll/erlymock.git</connection>
+    <developerConnection>scm:git:git@github.com:sheyll/erlymock.git</developerConnection>
+    <url>https://github.com/sheyll/erlymock</url>
+  </scm>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://github.com/sheyll/erlymock/raw/master/LICENSE</url>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>sheyll</id>
+      <name>Sven Heyll</name>
+      <email>sven.heyll@gmail.com</email>
+      <url>http://sheyll.blogspot.com</url>
+      <organization>Lindenbaum GmbH</organization>
+      <organizationUrl>http://www.lindenbaum.eu</organizationUrl>
+      <roles>
+        <role>architect</role>
+        <role>developer</role>
+      </roles>
+      <timezone>+1</timezone>
+    </developer>
+  </developers>
+
+  <issueManagement>
+    <system>GitHub</system>
+    <url>https://github.com/sheyll/erlymock/issues</url>
+  </issueManagement>
+
+<reporting>
+    <plugins>
+      <plugin>
+        <groupId>eu.lindenbaum</groupId>
+        <artifactId>maven-erlang-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </reporting>
 
 </project>

@@ -5,6 +5,12 @@
     <menu name="Overview">
       <item name="Introduction" href="index.html" />
     </menu>
+    <menu name="Project">
+      <item name="Summary" href="project-summary.html" />
+      <item name="Team" href="team-list.html" />
+      <item name="Source code" href="source-repository.html" />
+      <item name="Issue tracking" href="issue-tracking.html" />
+    </menu>
     <menu ref="reports" />
   </body>
 </project>
