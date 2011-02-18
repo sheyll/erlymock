@@ -1,11 +1,45 @@
 %%%-------------------------------------------------------------------
 %%% @author Sven Heyll <sven.heyll@lindenbaum.eu>
-%%% @doc
-%%% 'em' stands for 'Early Mock'.
-%%% A mocking library that works similar to easymock. Code for modules
-%%% that should be mocked is created and loaded on the fly.
-%%% @end
 %%% @copyright (C) 2011, Sven Heyll
+%%% @doc
+%%% The module name 'em' stands for 'Erly Mock'.
+%%%
+%%% <p>This mocking library works similar to Easymock.</p>
+%%% 
+%%% <p>After a mock process is started by <code>new/0</code> it can be
+%%% programmed to expect function calls and to react to them in two 
+%%% ways: <ul><li>by returning a value</li><li>by executing an arbitrary 
+%%% function</li></ul> 
+%%% This is done with <code>strict/4, strict/5, stub/4, stub/5</code>.
+%%% </p>
+%%%
+%%% <p>Before the code under test is executed, the mock must be told
+%%% that the programming phase is over by <code>replay/1</code>.</p>
+%%%
+%%% <p>In the next phase the code under test is run, and might or 
+%%% might not call the functions mocked.
+%%% The mock process checks that all functions programmed with 
+%%% <code>strict/4, strict/5</code>are called in the
+%%% correct order, with the expected arguments and reacts in the way
+%%% defined during the programming phase. If a mocked function is called 
+%%% although another function was expected, or if an expected function
+%%% was called with different arguments, the mock process dies and
+%%% prints a comprehensive error message before failing the test.</p>
+%%%
+%%% <p>At the end of a unit test <code>verify/1</code> is called to
+%%% check for missing invocations at the end of the programming phase
+%%% and to remove all modules, that were dynamically created and loaded
+%%% during the programming phase.</p>
+%%%
+%%% NOTE: This library works by purging the modules mocked and replacing 
+%%% them with dynamically created and compiled code, so be careful what
+%%% you mock, i.e. it brings chaos to mock modules from kernel. This also
+%%% implies, that tests that mock the same modules must be run sequentially.
+%%%
+%%% Apart from that, it is very advisable to <b>only mock owned modules</b>
+%%% anyway.
+%%% 
+%%% @end
 %%%-------------------------------------------------------------------
 -module(em).
 
@@ -33,10 +67,21 @@
 %%%% important types
 %%
 
+%%------------------------------------------------------------------------------
+%% The type that defines the argument list passed to strict() or stub().
+%% Each list element is either a value that will be matched to the actual value
+%% of the parameter at that position, or a predicate function which will be 
+%% applied to the actual argument.
+%%------------------------------------------------------------------------------
 -type args() :: [ fun((any()) ->
                              true | false)
                      | term()].
 
+%%------------------------------------------------------------------------------
+%% The type that defines the response to a mocked function call. A response is
+%% either that a value is returned, or the application of a function to the 
+%% actual arguments.
+%%------------------------------------------------------------------------------
 -type answer() :: {function, fun(([any()]) -> any())}
                   | {return, any()} .
 
@@ -44,26 +89,83 @@
 %%%% API
 %%
 
--spec any() ->
-                 fun((any()) ->
-                    true).
-any() ->
-    fun(_) ->
-            true
-    end.
-
+%%------------------------------------------------------------------------------
+%% @doc
+%% Spawns a linked mock process and returns it's pid. This is usually the first
+%% thing to do in each unit test. The resulting pid is used in the other
+%% functions below. NOTE: only a single mock proccess is required for a single
+%% unit test case. One mock process can mock an arbitrary number of different 
+%% modules.
+%% When the mock process dies, all uploaded modules are purged from the code
+%% server, and all cover compiled modules are restored.
+%% When the process that started the mock exits, the mock automatically cleans
+%% up and exits.
+%% After new() the mock is in 'programming' state. 
+%% @end
+%%------------------------------------------------------------------------------
 -spec new() ->
                  pid().
 new() ->
     {ok, Pid} = gen_fsm:start_link(?MODULE, [], []),
     Pid.
 
+%%------------------------------------------------------------------------------
+%% @doc
+%% Adds an expectation during the programming phase for a specific functiion
+%% invokation. 
+%% <p>All expectations defined by 'strict' define an order in which the
+%% application must call the mocked functions, hence the name 'strict' as oposed
+%% to 'stub' (see below).</p>
+%% <p>The parameters are:
+%% <ul>
+%% <li><code>M</code> the mock pid, returned by <code>new/0</code></li>
+%% <li><code>Mod</code> the module of the function to mock</li>
+%% <li><code>Fun</code> the name of the function to mock</li>
+%% <li><code>Args</code> a list of expected arguments. 
+%% Each list element is either a value that will be matched to the actual value 
+%% of the parameter at that position, or a predicate function which will be 
+%% applied to the actual argument.</li>
+%% </ul></p>
+%% <p>
+%% The return value, that the application will get when calling the mocked
+%% function is simply the atom <code>ok</code>. This differentiates this
+%% function from <code>strict/5</code>, which allows the definition of a
+%% custom response function or a custom return value.
+%% </p>
+%% NOTE: This function may only be called between <code>new/0</code> and
+%% <code>replay/1</code> - that is during the programming phase.
+%% @end
+%%------------------------------------------------------------------------------
 -spec strict(pid(), atom(), atom(), args()) ->
                     ok.
 strict(M, Mod, Fun, Args)
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
     strict(M, Mod, Fun, Args, {return, ok}).
 
+%%------------------------------------------------------------------------------
+%% @doc
+%% This function behaves like <code>strict/4</code>
+%% and additionally accepts a return value or an answer function. That parameter
+%% <code>Answer</code> may be:
+%% <ul>
+%% <li><code>{return, SomeValue}</code> This causes the mocked function invocation to 
+%% return the specified value.</li>
+%% <li><code>{function, fun(([Arg1, ... , ArgN]) -> SomeValue)}</code> This defines
+%% a function to be called when the mocked invokation happens. 
+%% That function is applied to all captured actual arguments.  For convenience these
+%% are passed as a list, so the user can simply write <code>fun(_) -> ...</code> 
+%% when the actual values are not needed.
+%% The function will be executed by the process that calls the mocked function, not
+%% by the mock process. Hence the function may access <code>self()</code> and may 
+%% throw an exception, which will then correctly appear in the process under test,
+%% allowing unit testing of exception handling.
+%% Otherwise the value returned by the function is passed through as the value 
+%% returned from the invocation.
+%% </li>
+%% </ul>
+%% @see strict/4. <code>strict/4</code>
+%% @end
+%%------------------------------------------------------------------------------
 -spec strict(pid(), atom(), atom(), args(), answer()) ->
                     ok.
 strict(M, Mod, Fun, Args, Answer = {return, _})
@@ -73,12 +175,29 @@ strict(M, Mod, Fun, Args, Answer = {function, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
     ok = gen_fsm:sync_send_event(M, {strict, Mod, Fun, Args, Answer}).
 
+%%------------------------------------------------------------------------------
+%% @doc
+%% Defines a what happens when a function is called whithout recording any
+%% expectations. The invocations defined by this function may happen in any order
+%% any number of times. The way, the invocation is defined is analog to
+%% @see strict/4. <code>strict/4</code>
+%% @end
+%%------------------------------------------------------------------------------
 -spec stub(pid(), atom(), atom(), args()) ->
                   ok.
 stub(M, Mod, Fun, Args)
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
     stub(M, Mod, Fun, Args, {return, ok}).
 
+%%------------------------------------------------------------------------------
+%% @doc
+%% This is similar <code>stub/4</code> except that it, like
+%% <code>strict/5</code> allows the definition of a return value
+%% or an answer function.
+%% @see stub/4. <code>stub/4</code>
+%% @see strict/5. <code>strict/5</code>
+%% @end
+%%------------------------------------------------------------------------------
 -spec stub(pid(), atom(), atom(), args(), answer()) ->
                   ok.
 stub(M, Mod, Fun, Args, Answer = {return, _})
@@ -88,11 +207,45 @@ stub(M, Mod, Fun, Args, Answer = {function, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
     ok = gen_fsm:sync_send_event(M, {stub, Mod, Fun, Args, Answer}).
 
+%%------------------------------------------------------------------------------
+%% @doc
+%% Finishes the programming phase and switches to the replay phase where the 
+%% actual code under test may run and invoke the functions mocked. This may
+%% be called only once, and only in the programming phase. This also loads 
+%% (or replaces) the modules of the functions mocked.
+%% In the replay phase the code under test may call all mocked functions.
+%% If the application calls a mocked function with invalid arguments, or
+%% if the application calls a function not expected on a mocked module, the mock
+%% process dies and - if used in a typical edoc test suite - fails the test.
+%% @end
+%%------------------------------------------------------------------------------
 replay(M) ->
     ok = gen_fsm:sync_send_event(M, replay).
 
+%%------------------------------------------------------------------------------
+%% @doc
+%% Finishes the replay phase. If the code under test did not cause all expected
+%% invokations defined by <code>strict/4</code> or <code>strict/5</code>, the 
+%% call will fail with <code>badmatch</code> with a comprehensive error message.
+%% Otherwise the mock process exits normally, returning <code>ok</code>.
+%% @end
+%%------------------------------------------------------------------------------
 verify(M) ->
     ok = gen_fsm:sync_send_event(M, verify).
+
+%%------------------------------------------------------------------------------
+%% @doc
+%% Utility function that can be used as a match function in an argument list
+%% to match any value.
+%% @end
+%%------------------------------------------------------------------------------
+-spec any() ->
+                 fun((any()) ->
+                    true).
+any() ->
+    fun(_) ->
+            true
+    end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% internal state
@@ -113,6 +266,10 @@ verify(M) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% gen_fsm callbacks
 %%
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 init([]) ->
     {ok,
      programming,
@@ -122,6 +279,9 @@ init([]) ->
        mocked_modules = []}}.
 
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 programming({strict, Mod, Fun, Args, Answer},
             _From,
             State = #state{strict = Strict}) ->
@@ -154,6 +314,9 @@ programming(replay,
        strict = lists:reverse(Strict),
        mocked_modules = MMs}}.
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 replaying(I = {invokation, Mod, Fun, Args},
           _From,
           State = #state{
@@ -200,6 +363,9 @@ replaying(verify,
     Reason = {invokations_missing, State#state.strict},
     {stop, Reason, Reason, State}.
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 no_expectations(I = {invokation, _M, _F, _A}, _From, State) ->
     case handle_stub_invokation(I, State#state.stub) of
         {ok, Answer} ->
@@ -215,6 +381,9 @@ no_expectations(verify,
          State) ->
     {stop, normal, ok, State}.
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 terminate(_Reason, _StateName, State) ->
     unload_mock_modules(State).
 
@@ -222,6 +391,9 @@ terminate(_Reason, _StateName, State) ->
 %%%% api for generated mock code
 %%
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 invoke(M, Mod, Fun, Args) ->
     case gen_fsm:sync_send_event(M, {invokation, Mod, Fun, Args}) of
         {return, Value} ->
@@ -233,6 +405,9 @@ invoke(M, Mod, Fun, Args) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% internal functions
 %%
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 unload_mock_modules(#state{mocked_modules = MMs}) ->
     [begin
 	 code:delete(Mod),
@@ -246,12 +421,18 @@ unload_mock_modules(#state{mocked_modules = MMs}) ->
      end
      || {Mod, MaybeBin} <- MMs].
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 install_mock_modules(#state{strict = ExpectationsStrict,
                             stub = ExpectationsStub}) ->
     Expectations = ExpectationsStub ++ ExpectationsStrict,
     ModulesToMock = lists:usort([M || #expectation{m = M} <- Expectations]),
     [install_mock_module(M, Expectations) || M <- ModulesToMock].
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 install_mock_module(Mod, Expectations) ->
     MaybeBin = get_cover_compiled_binary(Mod),
     ModHeaderSyn = [erl_syntax:attribute(erl_syntax:atom(module),
@@ -274,6 +455,9 @@ install_mock_module(Mod, Expectations) ->
     {Mod, MaybeBin}.
 
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 mock_fun_syn(Mod, F, Args) ->
     ArgsSyn = var_list_syn(Args),
     FunSyn = erl_syntax:atom(F),
@@ -283,10 +467,16 @@ mock_fun_syn(Mod, F, Args) ->
                           none,
                           body_syn(Mod, FunSyn, ArgsSyn))]).
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 var_list_syn(Args) ->
     [erl_syntax:variable(list_to_atom("Arg_" ++ integer_to_list(I)))
      || I <- lists:seq(0, Args - 1)].
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 body_syn(Mod, FunSyn, ArgsSyn) ->
     SelfStr = pid_to_list(self()),
     SelfSyn = erl_syntax:application(
@@ -301,6 +491,9 @@ body_syn(Mod, FunSyn, ArgsSyn) ->
         FunSyn,
         erl_syntax:list(ArgsSyn)])].
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 check_args(Args, ArgSpecs) ->
     try
         [begin
@@ -330,6 +523,9 @@ check_args(Args, ArgSpecs) ->
             E
     end.
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 handle_stub_invokation({invokation, Mod, Fun, Args}, Stubs) ->
     case [MatchingStub
           || MatchingStub = #expectation {m = M, f = F, a = A} <- Stubs,
@@ -343,6 +539,9 @@ handle_stub_invokation({invokation, Mod, Fun, Args}, Stubs) ->
             error
     end.
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 -spec get_cover_compiled_binary(atom()) ->
                                        {just, term()} | nothing.
 get_cover_compiled_binary(Mod) ->
