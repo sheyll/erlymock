@@ -6,7 +6,7 @@
   <packaging>erlang-std</packaging>
   <name>ErlyMock</name>
   <description>An EasyMock inspired mocking library for erlang.</description>
-  <url>https://github.com/sheyll/erlymock</url>
+  <url>http://erlymock-site.sourceforge.net/</url>
   <build>
     <plugins>
       <plugin>
@@ -30,6 +30,10 @@
       <name>Internal Snapshots</name>
       <url>${internalSnapshotsRepositoryUrl}</url>
     </snapshotRepository>
+    <site>
+      <id>erlymock-site.sf.net</id>
+      <url>scp://sheyll,erlymock-site@shell.sourceforge.net:/home/project-web/erlymock-site/htdocs</url>
+    </site>
   </distributionManagement>
 
   <scm>
@@ -66,7 +70,7 @@
     <url>https://github.com/sheyll/erlymock/issues</url>
   </issueManagement>
 
-<reporting>
+  <reporting>
     <plugins>
       <plugin>
         <groupId>eu.lindenbaum</groupId>
@@ -74,5 +78,4 @@
       </plugin>
     </plugins>
   </reporting>
-
 </project>

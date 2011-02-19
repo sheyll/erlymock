@@ -2,3 +2,94 @@
 ${project.name}
 
  ${project.description}
+
+ ErlyMock is the latest incarnation of an Erlang mocking library inspired by Easymock for Java. It is used in unit tests to verify that a set of functions is called by the code under test in correct order and with correct parameters.
+
+ With ErlyMock it is possible to declare the behavior of arbitrary modules/functions with or without expecting acutal invocations. The user simply declares what each function call to some function should return or do at the beginning of a unit test.
+
+* Features
+
+  * API documentation: {{http://erlymock-site.sourceforge.net/edoc/index.html}}
+
+  * battle proven in at least three large projects at {{http://www.lindenbaum.eu}}
+
+  * comprehensive runtime messages
+
+  * two-letter module name(we went from 'mock' to 'em', which was quite an improvement for us)
+
+  * small, flexible and easy to use API
+
+  * allows strict expectations
+
+  * allows stub behavior definitions to be intuitively mixed with strict expectations
+
+  * correctly restores cover compiled module
+
+  * automatic cleanup when mock or test process dies
+
+  * implemented with OTP standard behaviour
+
+  * because it is a maven project can be automatically installed as maven test dependency
+    Please refer to the excellent maven-erlang-plugin (excellent since Version 2.0.0-SNAPSHOT)
+    found here: {{http://erlang-plugin.sourceforge.net}}.
+
+  []
+
+* Usage Example
+
+    Assume there are two modules, used by the code to be tested, that shall be mocked (at least to prevent damaging side effects):
+
+  A rocket launcher server:
+
+------------------------------------------------------------
+-module(rocket_launcher).
+
+launch(Longitude, Latitude, Type) ->
+ ....
+------------------------------------------------------------
+
+
+  And A UI module:
+
+------------------------------------------------------------
+-module(rocket_launcher_ui).
+
+ask_for_instructions() ->
+ ...
+------------------------------------------------------------
+
+
+  Then this is how a happy case unit test might look like:
+
+------------------------------------------------------------
+launche_missle_test() ->
+   % create a new mock process
+   M = em:new(),
+
+   % define the expectations 
+   em:strict(M, rocket_launcher_ui, ask_for_instructions, [], 
+            {return, [{longitude, 123},
+                      {latitude, 999},
+                      {type, some_rocket_type}]}),
+   em:strict(M, missle_lauchner, launch, [123, 999, some_rocket_type]),
+  
+   % tell the mock that all expectations are defined 
+   em:replay(M),
+
+   % run code under test
+   rocket_app:interactive(),
+
+   % verify expectations
+   em:verify(M).
+------------------------------------------------------------
+
+* History of ErlyMock
+
+    ErlyMock has undergone many stages and years of development and usage before reaching this stage. 
+    It was first published here: {{http://sheyll.blogspot.com/2009/02/erlang-mock-erlymock.html}}
+    Then Samual Rivas cleaned it up and added support for restoring cover compiled modules for his project,
+    see {{http://www.lambdastream.com/}}.
+    The code was then added with all modifications to the great new erlang-maven-plugin forge which can be found here: {{http://sourceforge.net/projects/erlang-plugin/}}.
+
+    Then I decided to partially rewrite ErlyMock in order to provide a simpler API and in order to improve the code quality.
+    Also, I wanted to use the gen_fsm OTP standard behavior.
