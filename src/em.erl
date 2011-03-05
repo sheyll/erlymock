@@ -216,7 +216,7 @@ strict(M, Mod, Fun, Args, Answer = {function, _})
 stub(M, Mod, Fun, Args)
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
     stub(M, Mod, Fun, Args, {return, ok}).
-
+    
 %%------------------------------------------------------------------------------
 %% @doc
 %% This is similar <code>stub/4</code> except that it, like
@@ -293,7 +293,7 @@ any() ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% gen_fsm callbacks
-%%
+%%i
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -343,7 +343,7 @@ programming(replay,
        mocked_modules = MMs}}.
 
 %%------------------------------------------------------------------------------
-%% @private
+%% @private (goto-char 1)
 %%------------------------------------------------------------------------------
 replaying(I = {invokation, Mod, Fun, Args},
           _From,
@@ -465,13 +465,16 @@ unload_mock_modules(#state{mocked_modules = MMs}) ->
 	 code:delete(Mod),
 	 code:purge(Mod),
          case MaybeBin of
-             nothing ->
+              nothing ->
                  ignore;
              {just, {Mod, CoverCompiledBinary}} ->
                  code:load_binary(Mod, cover_compiled, CoverCompiledBinary)
          end
      end
      || {Mod, MaybeBin} <- MMs].
+
+test() ->
+    ok.
 
 %%------------------------------------------------------------------------------
 %% @private
