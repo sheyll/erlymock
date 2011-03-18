@@ -3,9 +3,7 @@
     <title>Release Notes</title>
   </properties>
   <body>
-    <release version="3.0.0" date="TBA" description="Initial release">
-      <action dev="" type="" date="" issue="" due-to="" due-to-email="">
-      </action>
+    <release version="3.0.0" date="2011-03-18" description="Initial release">
     </release>
   </body>
 </document>
