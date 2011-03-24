@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.github.sheyll</groupId>
   <artifactId>em</artifactId>
-  <version>3.0.0</version>
+  <version>3.0.0-SNAPSHOT</version>
   <packaging>erlang-std</packaging>
   <name>ErlyMock</name>
   <description>An EasyMock inspired mocking library for erlang.</description>
@@ -17,6 +17,12 @@
       </plugin>
     </plugins>
   </build>
+
+  <parent>
+    <groupId>org.sonatype.oss</groupId>
+    <artifactId>oss-parent</artifactId>
+    <version>7</version>
+  </parent>
 
   <distributionManagement>
     <!-- !!! NOTE: DEPENDS ON ~/.m2/settings.xml !!! -->
