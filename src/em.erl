@@ -462,8 +462,8 @@ invoke(M, Mod, Fun, Args) ->
 %%------------------------------------------------------------------------------
 unload_mock_modules(#state{mocked_modules = MMs}) ->
     [begin
-	 code:delete(Mod),
-	 code:purge(Mod),
+         code:delete(Mod),
+         code:purge(Mod),
          case MaybeBin of
               nothing ->
                  ignore;
@@ -473,8 +473,8 @@ unload_mock_modules(#state{mocked_modules = MMs}) ->
      end
      || {Mod, MaybeBin} <- MMs].
 
-test() ->
-    ok.
+%% test() ->
+%%     ok.
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -491,7 +491,7 @@ install_mock_modules(#state{strict = ExpectationsStrict,
 install_mock_module(Mod, Expectations) ->
     MaybeBin = get_cover_compiled_binary(Mod),
     ModHeaderSyn = [erl_syntax:attribute(erl_syntax:atom(module),
-					 [erl_syntax:atom(Mod)]),
+                                         [erl_syntax:atom(Mod)]),
                     erl_syntax:attribute(erl_syntax:atom(compile),
                                          [erl_syntax:list(
                                             [erl_syntax:atom(export_all)])])],
