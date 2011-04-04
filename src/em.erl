@@ -397,7 +397,7 @@ replaying(I = {invokation, Mod, Fun, Args},
             {stop, Reason, Reason, State}
     end;
 
-replaying(I = {invokation, Mod, _F, _A},
+replaying(I = {invokation, _M, _F, _A},
           _From,
           State = #state{
 	    strict = [E|_]}) ->
@@ -497,9 +497,6 @@ unload_mock_modules(#state{mocked_modules = MMs}) ->
          end
      end
      || {Mod, MaybeBin} <- MMs].
-
-test() ->
-    ok.
 
 %%------------------------------------------------------------------------------
 %% @private
