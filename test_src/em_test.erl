@@ -145,3 +145,11 @@ gen_fsm_unimplemented_stops_test() ->
     ?assertEqual({stop, normal, ok, state}, em:handle_sync_event(x, y, z, state)),
     ?assertEqual({stop, normal, state}, em:handle_event(x, y, state)),
     ?assertEqual({ok, state_name, state}, em:code_change(old_vsn, state_name, state, extra)).    
+
+nothing_test() ->
+    {module, _} = code:ensure_loaded(module_not_to_call),
+    M = em:new(),
+    em:nothing(M, module_not_to_call),
+    em:replay(M),
+    ?assertMatch({'EXIT', {undef, _}}, catch module_not_to_call:some_fun(some_arg)),
+    ?assertMatch(ok, em:verify(M)).
