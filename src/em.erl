@@ -75,7 +75,8 @@
          stub/5,
          replay/1,
          verify/1,
-         any/0]).
+         any/0,
+	 nothing/2]).
 
 %% gen_fsm callbacks ---
 -export([programming/3,
@@ -237,6 +238,18 @@ stub(M, Mod, Fun, Args, Answer = {function, _})
 
 %%------------------------------------------------------------------------------
 %% @doc
+%% This is used to express the expectation that no function of a certain module
+%% is called. This will cause each function call on a module to throw an 'undef'
+%% exception.
+%% @end
+%%------------------------------------------------------------------------------
+-spec nothing(pid(), atom()) ->
+		     ok.
+nothing(M, Mod) when is_pid(M), is_atom(Mod) ->
+   ok = gen_fsm:sync_send_event(M, {nothing, Mod}).
+
+%%------------------------------------------------------------------------------
+%% @doc
 %% Finishes the programming phase and switches to the replay phase where the 
 %% actual code under test may run and invoke the functions mocked. This may
 %% be called only once, and only in the programming phase. This also loads 
@@ -288,6 +301,7 @@ any() ->
 -record(state, {
           strict :: [#expectation{}],
           stub  :: [#expectation{}],
+	  blacklist :: [atom()],
           mocked_modules :: [{atom(), {just, term()}|nothing}]
          }).
 
@@ -304,6 +318,7 @@ init([]) ->
      #state{
        strict = [],
        stub = [],
+       blacklist = [],
        mocked_modules = []}}.
 
 
@@ -327,6 +342,15 @@ programming({stub, Mod, Fun, Args, Answer},
      programming,
      State#state{
        stub = [#expectation{m = Mod, f = Fun, a = Args, answer = Answer}|Stub]}};
+
+programming({nothing, Mod},
+            _From,
+            State = #state{blacklist = BL}) ->
+    {reply,
+     ok,
+     programming,
+     State#state{
+       blacklist = [Mod | BL]}};	   
 
 programming(replay,
             _From,
@@ -373,16 +397,17 @@ replaying(I = {invokation, Mod, Fun, Args},
             {stop, Reason, Reason, State}
     end;
 
-replaying(I = {invokation, _M, _F, _A},
+replaying(I = {invokation, Mod, _F, _A},
           _From,
-          State = #state{strict = [E|_]}) ->
+          State = #state{
+	    strict = [E|_]}) ->
     case handle_stub_invokation(I, State#state.stub) of
-        {ok, Answer} ->
-            {reply, Answer, replaying, State};
-
-        error ->
-            Reason = {unexpected_invokation, {actual, I}, {expected, E}},
-            {stop, Reason, Reason, State}
+	{ok, Answer} ->
+	    {reply, Answer, replaying, State};
+	
+	error ->
+	    Reason = {unexpected_invokation, {actual, I}, {expected, E}},
+	    {stop, Reason, Reason, State}
     end;
 
 replaying(verify,
@@ -480,9 +505,10 @@ test() ->
 %% @private
 %%------------------------------------------------------------------------------
 install_mock_modules(#state{strict = ExpectationsStrict,
-                            stub = ExpectationsStub}) ->
+                            stub = ExpectationsStub,
+			    blacklist = BlackList}) ->
     Expectations = ExpectationsStub ++ ExpectationsStrict,
-    ModulesToMock = lists:usort([M || #expectation{m = M} <- Expectations]),
+    ModulesToMock = lists:usort([M || #expectation{m = M} <- Expectations] ++ BlackList),
     [install_mock_module(M, Expectations) || M <- ModulesToMock].
 
 %%------------------------------------------------------------------------------
