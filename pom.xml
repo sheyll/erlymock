@@ -37,6 +37,8 @@
       <url>${internalSnapshotsRepositoryUrl}</url>
     </snapshotRepository>
     <site>
+      <!-- Do A 'ssh -t sheyll,erlymock-site@shell.sourceforge.net create' to enable site deployment. -->
+      
       <id>erlymock-site.sf.net</id>
       <url>scp://sheyll,erlymock-site@shell.sourceforge.net:/home/project-web/erlymock-site/htdocs</url>
     </site>

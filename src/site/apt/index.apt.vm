@@ -36,51 +36,6 @@ ${project.name}
   []
 
 
-* Installation und usage with Maven
-
-Assume there is a new Project, that needs some unit testing with mocks. This is simple when using maven.
-
-Assume there is already one source file called "borg.erl".
-
--1. decide upon a short project name that would be a valid erlang atom without ' i.e. myproject
-0. Create a directory by that name: mkdir myproject
-1. Create a new maven project by writing a simple pom.xml which contains erlymock as dependency:
-------------------------------------------------------------
-<project>
-  <modelVersion>4.0.0</modelVersion>
-  <groupId>your.group.id</groupId>
-  <artifactId>myproject</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
-  <packaging>erlang-std</packaging>
-  <name>MyProject</name>
-  <description>Look ma' my project!</description>
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>eu.lindenbaum</groupId>
-        <artifactId>maven-erlang-plugin</artifactId>
-        <version>2.0.0</version>
-        <extensions>true</extensions>
-      </plugin>
-    </plugins>
-  </build>
-  <dependencies>
-    <dependency>
-      <groupId>com.github.sheyll</groupId>
-      <artifactId>em</artifactId>
-      <version>3.0.0</version>
-      <type>erlang-std</type>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
-</project>
-------------------------------------------------------------
-2. all necessary directories by running: "mvn erlang:setup"
-3. copy sources to myproject/src/
-4. copy unit tests into myproject/test_src/
-
-Now you can run 'mvn test' to run eunit. Erlymock will automatically be downloaded by maven.
-
 
 * Usage Example
 
@@ -129,6 +84,59 @@ launche_missle_test() ->
    % verify expectations
    em:verify(M).
 ------------------------------------------------------------
+
+* Installation und usage with Maven
+
+ Assume there is a new Project, that needs some unit testing with mocks. This is simple when using maven.
+
+ Assume there is already one source file called "borg.erl".
+
+   1. decide upon a short project name that would be a valid erlang atom without ' i.e. myproject
+
+   2. Create a directory by that name: mkdir myproject
+
+   3. Create a new maven project by writing a simple pom.xml which contains erlymock as dependency:
+
+------------------------------------------------------------
+<project>
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>your.group.id</groupId>
+  <artifactId>myproject</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>erlang-std</packaging>
+  <name>MyProject</name>
+  <description>Look ma' my project!</description>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>eu.lindenbaum</groupId>
+        <artifactId>maven-erlang-plugin</artifactId>
+        <version>2.0.0</version>
+        <extensions>true</extensions>
+      </plugin>
+    </plugins>
+  </build>
+  <dependencies>
+    <dependency>
+      <groupId>com.github.sheyll</groupId>
+      <artifactId>em</artifactId>
+      <version>3.0.0</version>
+      <type>erlang-std</type>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>
+------------------------------------------------------------
+
+   4. all necessary directories by running: "mvn erlang:setup"
+
+   5. copy sources to myproject/src/
+
+   6. copy unit tests into myproject/test_src/
+
+
+ Now you can run 'mvn test' to run eunit. Erlymock will automatically be downloaded by maven.
+
 
 * History of ErlyMock
 
