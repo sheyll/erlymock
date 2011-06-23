@@ -76,7 +76,8 @@
          replay/1,
          verify/1,
          any/0,
-	 nothing/2]).
+	 nothing/2,
+         lock/2]).
 
 %% gen_fsm callbacks ---
 -export([programming/3,
@@ -247,6 +248,17 @@ stub(M, Mod, Fun, Args, Answer = {function, _})
 		     ok.
 nothing(M, Mod) when is_pid(M), is_atom(Mod) ->
    ok = gen_fsm:sync_send_event(M, {nothing, Mod}).
+
+%%------------------------------------------------------------------------------
+%% @doc
+%% The function will block until all modules in the list are not
+%% mocked by another erlymock process.
+%% @end
+%%------------------------------------------------------------------------------
+-spec lock(pid(), [atom()]) ->
+		     ok.
+lock(M, Mods) when is_pid(M), is_list(Mods) ->
+   ok = em_module_locker:lock(M, Mods).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -506,6 +518,7 @@ install_mock_modules(#state{strict = ExpectationsStrict,
 			    blacklist = BlackList}) ->
     Expectations = ExpectationsStub ++ ExpectationsStrict,
     ModulesToMock = lists:usort([M || #expectation{m = M} <- Expectations] ++ BlackList),
+    em_module_locker:lock(self(), ModulesToMock),
     [install_mock_module(M, Expectations) || M <- ModulesToMock].
 
 %%------------------------------------------------------------------------------
