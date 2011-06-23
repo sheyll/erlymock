@@ -22,11 +22,11 @@
 %%%=============================================================================
 
 simple_lock_and_unlock_test() ->
+    process_flag(trap_exit, true),
     case whereis(em_module_locker) of
         undefined -> 
             ok;
         MLP ->
-            process_flag(trap_exit, true),
             link(MLP),
             exit(MLP, shutdown),
             receive 

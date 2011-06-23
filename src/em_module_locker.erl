@@ -46,8 +46,12 @@
 -spec lock(pid(), [module()]) ->
                   ok.
 lock(MockPid, Mods) ->
-    gen_server:start({local, ?SERVER}, ?MODULE, [], []),
-    gen_server:call(?MODULE, {lock, MockPid, Mods}).
+    case whereis(?MODULE) of
+        undefined -> gen_server:start({local, ?SERVER}, ?MODULE, [], []);
+        _ ->
+            ok
+    end,
+    gen_server:call(?MODULE, {lock, MockPid, Mods}, infinity).
 
 %%%=============================================================================
 %%% gen_server Callbacks
@@ -66,8 +70,7 @@ handle_call({lock, MockPid, Mods}, From,
             State = #state{}) ->
     monitor(process, MockPid),
     NewState = State#state{waiting_mocks = [{MockPid, Mods, From} | State#state.waiting_mocks]},
-    gen_server:cast(?MODULE, perform_locking),
-    {noreply, NewState};
+    em_module_locker:handle_cast(perform_locking, NewState);
 
 handle_call(_Request, _From, State) ->
     utils:default_handle_call(State).

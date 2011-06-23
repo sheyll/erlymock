@@ -155,18 +155,7 @@ nothing_test() ->
     ?assertMatch(ok, em:verify(M)).
 
 auto_lock_test() ->
-    case whereis(em_module_locker) of
-        undefined -> 
-            ok;
-        MLP ->
-            process_flag(trap_exit, true),
-            link(MLP),
-            exit(MLP, shutdown),
-            receive 
-                {'EXIT', MLP, _} ->
-                    ok
-            end
-    end,
+    process_flag(trap_exit, true),
     Target = self(),
     spawn(fun() ->
                   M1 = em:new(),
@@ -195,53 +184,32 @@ auto_lock_test() ->
     end.
 
 explicit_lock_test() ->
-    case whereis(em_module_locker) of
-        undefined -> 
-            ok;
-        MLP ->
-            process_flag(trap_exit, true),
-            link(MLP),
-            exit(MLP, shutdown),
-            receive 
-                {'EXIT', MLP, _} ->
-                    ok
-            end
-    end,
+    process_flag(trap_exit, true),
     Target = self(),
-    M1 = spawn(fun() ->
-                       M1 = em:new(),
-                       em:strict(M1, mod1, test, [x]),
-                       em:replay(M1),
-                       receive after 1 -> ok end,
-                       mod1:test(x),
-                       Target ! mm1,
-                       receive 
-                           m1_down ->
-                               ok
-                       end,
-                       em:verify(M1)
-               end),
+    spawn(fun() ->
+                  M1 = em:new(),
+                  em:strict(M1, mmod1, test, [x]),
+                  em:replay(M1),
+                  receive after 1 -> ok end,
+                  mmod1:test(x),
+                  em:verify(M1),
+                  Target ! mm1
+          end),
     spawn(fun() ->
                   M2 = em:new(),
-                  em:lock(M2, [mod1, mod3]),
-                  em:strict(M2, mod2, test, [y,z]),
+                  em:lock(M2, [mmod1, mmod3]),
+                  em:strict(M2, mmod2, test, [y,z]),
                   em:replay(M2),
                   receive after 1 -> ok end,
-                  mod2:test(y,z),
+                  mmod2:test(y,z),
                   em:verify(M2),
                   Target ! mm2
           end),
     receive 
-       mm1 ->            
+        mm1 ->            
             receive 
                 mm2 ->
-                    throw(fail1)
-            after 50 ->
-                    M1 ! m1_down,
-                    receive
-                        mm2 -> 
-                            ok
-                    end
+                    ok
             end
     end.
 
