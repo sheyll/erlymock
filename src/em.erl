@@ -527,6 +527,7 @@ invoke(M, Mod, Fun, Args) ->
 %%------------------------------------------------------------------------------
 unload_mock_modules(#state{mocked_modules = MMs}) ->
     [begin
+   code:purge(Mod),
 	 code:delete(Mod),
 	 code:purge(Mod),
          case MaybeBin of
@@ -568,6 +569,7 @@ install_mock_module(Mod, Expectations) ->
         compile:forms([erl_syntax:revert(F)
                        || F <- ModHeaderSyn ++ FunFormsSyn]),
 
+    code:purge(Mod),
     code:delete(Mod),
     code:purge(Mod),
     {module, _} = load_module(Mod, Code),
