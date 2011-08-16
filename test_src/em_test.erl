@@ -50,11 +50,13 @@ invalid_parameter_1_test() ->
                                          end]),
     em:replay(M),
     process_flag(trap_exit, true),
-    ?assertError({case_clause, 
-                  {unexpected_function_parameter,
-                   {error_in_parameter, 1}, {expected, a}, {actual, 666},
-                   {invokation, some_mod, some_fun, [666, b]}}}, 
-                 some_mod:some_fun(666, b)).
+    ?assertMatch({'EXIT', 
+                  {{case_clause, 
+                   {unexpected_function_parameter,
+                    {error_in_parameter, 1}, {expected, a}, {actual, 666},
+                    {invokation, some_mod, some_fun, [666, b], _}}},
+                   _}}, 
+                 catch some_mod:some_fun(666, b)).
 
 invalid_order_test() ->
     M = em:new(),
@@ -62,11 +64,13 @@ invalid_order_test() ->
     em:strict(M, some_mod, some_fun, [a]),
     em:replay(M),
     process_flag(trap_exit, true),
-    ?assertError({case_clause,{unexpected_invokation,
-                               {actual,{invokation,some_mod,some_fun,[a]}},
-                               {expected,{expectation,some_mod,some_fun,[a,b],
-                                          {return,ok}}}}}, 
-                 some_mod:some_fun(a)).
+    ?assertMatch({'EXIT', 
+                  {{case_clause, 
+                    {unexpected_invokation,
+                     {actual,{invokation,some_mod,some_fun,[a], _}},
+                     {expected,{expectation,some_mod,some_fun,[a,b],
+                                {return,ok}}}}}, _}}, 
+                 catch some_mod:some_fun(a)).
 
 too_many_invokations_test() ->
     M = em:new(),
@@ -74,9 +78,10 @@ too_many_invokations_test() ->
     em:replay(M),
     ok = some_mod:some_fun(a, b),
     process_flag(trap_exit, true),
-    ?assertError({case_clause,{unexpected_invokation,
-                               {actual,{invokation,some_mod,some_fun,[a, b]}}}}, 
-                 some_mod:some_fun(a, b)).
+    ?assertMatch({'EXIT', {{case_clause,{unexpected_invokation,
+                                         {actual,
+                                          {invokation,some_mod,some_fun,[a, b], _}}}}, _}}, 
+                 catch some_mod:some_fun(a, b)).
 
 invokations_missing_test() ->
     M = em:new(),
@@ -101,7 +106,7 @@ invalid_parameter_2_test() ->
                              {error_in_parameter, 2},
                              {expected, _},
                              {actual, 666},
-                             {invokation, some_mod, some_fun, [a, 666]}}}, _}}, 
+                             {invokation, some_mod, some_fun, [a, 666], _}}}, _}}, 
                  catch(some_mod:some_fun(a, 666))).
 
 strict_and_stub_test() ->
@@ -164,11 +169,11 @@ gen_fsm_unimplemented_stops_test() ->
     ?assertEqual({ok, state_name, state}, em:code_change(old_vsn, state_name, state, extra)).    
 
 nothing_test() ->
-    {module, _} = code:ensure_loaded(module_not_to_call),
+    {module, _} = code:ensure_loaded(mnesia),
     M = em:new(),
-    em:nothing(M, module_not_to_call),
+    em:nothing(M, mnesia),
     em:replay(M),
-    ?assertMatch({'EXIT', {undef, _}}, catch module_not_to_call:some_fun(some_arg)),
+    ?assertMatch({'EXIT', {undef, _}}, catch mnesia:blub(some_arg)),
     ?assertMatch(ok, em:verify(M)).
 
 auto_lock_test() ->
@@ -230,4 +235,9 @@ explicit_lock_test() ->
             end
     end.
 
-        
+em_zelf_test() ->        
+    M = em:new(),
+    em:strict(M, mod, f, [em:zelf()]),
+    em:replay(M),
+    mod:f(self()),
+    em:verify(M).

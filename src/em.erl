@@ -76,6 +76,7 @@
          replay/1,
          verify/1,
          any/0,
+         zelf/0,
 	 nothing/2,
          lock/2]).
 
@@ -95,7 +96,7 @@
 -export([invoke/4]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% next invokation must happen in this time, otherwise ... BOOM!!!111oneoneelven
+%% next invokation must happen in this time, orelse ... BOOM!!!111oneoneeleventy
 -define(INVOKATION_TIMEOUT, 4020).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -141,7 +142,7 @@
 -spec new() ->
                  pid().
 new() ->
-    {ok, Pid} = gen_fsm:start_link(?MODULE, [self()], []),
+    {ok, Pid} = gen_fsm:start_link(?MODULE, [erlang:self()], []),
     Pid.
 
 %%------------------------------------------------------------------------------
@@ -305,6 +306,18 @@ any() ->
             true
     end.
 
+%%------------------------------------------------------------------------------
+%% @doc
+%% Utility function that can be used as a match function in an
+%% argument list to match self(), e.g. when it matches the pid of the
+%% process, that calls the funtion during the replay phase.
+%% @end
+%%------------------------------------------------------------------------------
+-spec zelf() -> 
+                  atom().
+zelf() -> 
+    '$$em zelf$$'.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% internal state
 %%
@@ -396,7 +409,7 @@ replaying({timeout, Ref, invokation_timeout},
                          strict = Expectations}) ->
     {stop,{invokation_timeout, {missing_invokations, Expectations}},State}.
 
-replaying(I = {invokation, Mod, Fun, Args},
+replaying(I = {invokation, Mod, Fun, Args, IPid},
           _From,
           State = #state{
             inv_to_ref = InvTORef,
@@ -408,7 +421,7 @@ replaying(I = {invokation, Mod, Fun, Args},
                       |Rest]})
   when length(EArgs) == length(Args) ->
     gen_fsm:cancel_timer(InvTORef),
-    case check_args(Args, EArgs) of
+    case check_args(Args, EArgs, IPid) of
         true ->
             {reply,
              Answer,
@@ -429,7 +442,7 @@ replaying(I = {invokation, Mod, Fun, Args},
             {stop, Reason, Reason, State}
     end;
 
-replaying(I = {invokation, _M, _F, _A},
+replaying(I = {invokation, _M, _F, _A, _IPid},
           _From,
           State = #state{
             inv_to_ref = InvTORef,
@@ -457,7 +470,7 @@ replaying(verify,
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-no_expectations(I = {invokation, _M, _F, _A}, _From, State = #state{inv_to_ref = InvTORef}) ->
+no_expectations(I = {invokation, _M, _F, _A, _IPid}, _From, State = #state{inv_to_ref = InvTORef}) ->
     gen_fsm:cancel_timer(InvTORef),
     case handle_stub_invokation(I, State#state.stub) of
         {ok, Answer} ->
@@ -512,7 +525,7 @@ handle_event(_Msg, _StateName, State) ->
 %% @private
 %%------------------------------------------------------------------------------
 invoke(M, Mod, Fun, Args) ->
-    case gen_fsm:sync_send_event(M, {invokation, Mod, Fun, Args}) of
+    case gen_fsm:sync_send_event(M, {invokation, Mod, Fun, Args, self()}) of
         {return, Value} ->
             Value;
         {function, F} ->
@@ -547,7 +560,7 @@ install_mock_modules(#state{strict = ExpectationsStrict,
 			    blacklist = BlackList}) ->
     Expectations = ExpectationsStub ++ ExpectationsStrict,
     ModulesToMock = lists:usort([M || #expectation{m = M} <- Expectations] ++ BlackList),
-    em_module_locker:lock(self(), ModulesToMock),
+    em_module_locker:lock(erlang:self(), ModulesToMock),
     [install_mock_module(M, Expectations) || M <- ModulesToMock].
 
 %%------------------------------------------------------------------------------
@@ -599,7 +612,7 @@ var_list_syn(Args) ->
 %% @private
 %%------------------------------------------------------------------------------
 body_syn(Mod, FunSyn, ArgsSyn) ->
-    SelfStr = pid_to_list(self()),
+    SelfStr = pid_to_list(erlang:self()),
     SelfSyn = erl_syntax:application(
                 erl_syntax:atom(erlang),
                 erl_syntax:atom(list_to_pid),
@@ -615,7 +628,7 @@ body_syn(Mod, FunSyn, ArgsSyn) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-check_args(Args, ArgSpecs) ->
+check_args(Args, ArgSpecs, InvokationPid) ->
     try
         [begin
              if
@@ -625,13 +638,23 @@ check_args(Args, ArgSpecs) ->
                              ok;
                          _ ->
                              throw({error, I, E, A})
-                     end;
-
-                 A =/= E ->
-                     throw({error, I, E, A});
-
-                 A == E ->
-                     ok
+                     end;                  
+                 true ->
+                     case E of
+                         
+                         '$$em zelf$$' -> 
+                             if A =/= InvokationPid -> 
+                                     throw({error, I, E, A});
+                                true ->
+                                     ok
+                             end;
+                         
+                         A ->
+                             ok;
+                         
+                         _Otherwise ->
+                             throw({error, I, E, A})
+                     end
              end
          end
          || {I, A, E} <- lists:zip3(lists:seq(1, length(Args)),
@@ -647,11 +670,11 @@ check_args(Args, ArgSpecs) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-handle_stub_invokation({invokation, Mod, Fun, Args}, Stubs) ->
+handle_stub_invokation({invokation, Mod, Fun, Args, IPid}, Stubs) ->
     case [MatchingStub
           || MatchingStub = #expectation {m = M, f = F, a = A} <- Stubs,
              M == Mod, F == Fun, length(Args) == length(A),
-             check_args(Args, A) == true] of
+             check_args(Args, A, IPid) == true] of
 
         [#expectation{answer = Answer}|_] ->
             {ok, Answer};

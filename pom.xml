@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.github.sheyll</groupId>
   <artifactId>em</artifactId>
-  <version>3.2.1</version>
+  <version>3.2.2</version>
   <packaging>erlang-std</packaging>
   <name>ErlyMock</name>
   <description>An EasyMock inspired mocking library for erlang.</description>
