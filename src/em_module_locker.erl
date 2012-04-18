@@ -34,6 +34,8 @@
          locking_mocks  = [] :: [{pid(), [module()], term()}],
          waiting_mocks  = [] :: [{pid(), [module()], term()}]}).
 
+-type state() :: #state{}.
+
 %%------------------------------------------------------------------------------
 %% @doc
 %% The maximum amount of time, that a process may lock modules before being
@@ -69,12 +71,16 @@ lock(MockPid, Mods) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec init(Args :: []) -> {ok, state()}.
 init([]) ->
     {ok, #state{}}.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec handle_call(Request :: term(), From :: term(), State :: state()) ->
+                         {reply, Reply :: term(), NewState :: state()} |
+                         term().
 handle_call({lock, MockPid, Mods}, From, 
             State = #state{}) ->
     monitor(process, MockPid),
@@ -84,7 +90,9 @@ handle_call({lock, MockPid, Mods}, From,
 handle_call(_Request, _From, State) ->
     utils:default_handle_call(State).
 
-
+-spec handle_cast(Msg :: term(), State :: state()) ->
+                         {noreply, NewState :: state()} |
+                         term().
 handle_cast(perform_locking,
             State) ->
     Mocks_To_Reply = [M || M = {_, Mods, _} <- State#state.waiting_mocks, 
@@ -112,14 +120,17 @@ handle_cast(_Request, State) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec handle_info(Info :: term(), State :: state()) ->
+                         {noreply, State :: state()} |
+                         term().
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, 
             StateWithTimers = #state{timers = Timers}) ->
-    case dict:find(Pid, Timers) of
-        {ok, TRef} ->
-            State = StateWithTimers#state{timers = dict:erase(Pid, Timers)},
-            timer:cancel(TRef);
-        _ -> 
-            State = StateWithTimers
+    State = case dict:find(Pid, Timers) of
+                {ok, TRef} ->
+                    timer:cancel(TRef),
+                    StateWithTimers#state{timers = dict:erase(Pid, Timers)};
+                _ -> 
+                    StateWithTimers
     end,
     Mocks_To_Unlock = [M || M = {P, _, _} <- State#state.locking_mocks, 
                             P == Pid],
@@ -140,12 +151,15 @@ handle_info(Info, State) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec terminate(Reason :: term(), State :: state()) -> ok.
 terminate(_Reason, _State) ->
     ok.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec code_change(OldVsn :: term(), State :: state(), Extra :: term()) ->
+                         {ok, NewState :: state()}.
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
