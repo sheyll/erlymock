@@ -278,6 +278,7 @@ lock(M, Mods) when is_pid(M), is_list(Mods) ->
 %% process dies and - if used in a typical edoc test suite - fails the test.
 %% @end
 %%------------------------------------------------------------------------------
+-spec replay(M :: term()) -> ok.
 replay(M) ->
     ok = gen_fsm:sync_send_event(M, replay).
 
@@ -289,6 +290,7 @@ replay(M) ->
 %% Otherwise the mock process exits normally, returning <code>ok</code>.
 %% @end
 %%------------------------------------------------------------------------------
+-spec verify(M :: term()) -> ok.
 verify(M) ->
     ok = gen_fsm:sync_send_event(M, verify).
 
@@ -337,6 +339,8 @@ zelf() ->
           mocked_modules :: [{atom(), {just, term()}|nothing}]
          }).
 
+-type statedata() :: #state{}.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% gen_fsm callbacks
 %%i
@@ -344,6 +348,8 @@ zelf() ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec init([TestProc :: term()]) ->
+                  {ok, atom(), StateData :: statedata()}.
 init([TestProc]) ->
     {ok,
      programming,
@@ -358,6 +364,9 @@ init([TestProc]) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec programming(Event :: term(), From :: term(), State :: statedata()) ->
+                         {reply, Reply :: term(), NextState :: atom(),
+                          NewStateData :: statedata()}.
 programming({strict, Mod, Fun, Args, Answer},
             _From,
             State = #state{strict = Strict}) ->
@@ -404,11 +413,18 @@ programming(replay,
 %%------------------------------------------------------------------------------
 %% @private (goto-char 1)
 %%------------------------------------------------------------------------------
+-spec replaying(Event :: term(), StateData :: statedata()) ->
+                       {stop, Reason :: term(), NewStateData :: statedata()}.
 replaying({timeout, Ref, invokation_timeout},
           State = #state{inv_to_ref = Ref,
                          strict = Expectations}) ->
     {stop,{invokation_timeout, {missing_invokations, Expectations}},State}.
 
+-spec replaying(Event :: term(), From :: term(), StateData :: statedata()) ->
+                       {reply, Reply :: term(), NextState :: atom(),
+                        NewStateData :: statedata()} |
+                       {stop, Reason :: term(), Reply :: term(),
+                        NewStateData :: statedata()}.
 replaying(I = {invokation, Mod, Fun, Args, IPid},
           _From,
           State = #state{
@@ -470,6 +486,12 @@ replaying(verify,
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec no_expectations(Event :: term(), From :: term(),
+                      StateData :: statedata()) ->
+                             {reply, Reply :: term(), NextState :: atom(),
+                              NewStateData :: statedata()} |
+                             {stop, Reason :: term(), Reply :: term(),
+                              NewStateData :: statedata()}.
 no_expectations(I = {invokation, _M, _F, _A, _IPid}, _From, State = #state{inv_to_ref = InvTORef}) ->
     gen_fsm:cancel_timer(InvTORef),
     case handle_stub_invokation(I, State#state.stub) of
@@ -489,6 +511,8 @@ no_expectations(verify,
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec terminate(Reason :: term(), StateName :: atom(),
+                StateData :: statedata()) -> no_return().
 terminate(Reason, _StateName, State = #state{test_proc = TestProc}) ->
     unload_mock_modules(State),
     exit(TestProc, Reason).
@@ -496,24 +520,36 @@ terminate(Reason, _StateName, State = #state{test_proc = TestProc}) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec code_change(OldVsn :: term(), StateName :: atom(), State :: statedata(),
+                  Extra :: term()) ->
+                         {ok, NextState :: atom(), NewStateData :: statedata()}.
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec handle_sync_event(Event :: term(), From :: term(), StateName :: atom(),
+                        StateData :: statedata()) ->
+                               {stop, normal, ok, NewStateData :: statedata()}.
 handle_sync_event(_Evt, _From, _StateName, State) ->
     {stop, normal, ok, State}.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec handle_info(Info :: term(), StateName :: atom(),
+                  StateData :: statedata()) ->
+                         {stop, normal, NewStateData :: statedata()}.
 handle_info(_Info, _StateName, State) ->
     {stop, normal, State}.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec handle_event(Msg :: term(), StateName :: atom(),
+                   StateData :: statedata()) ->
+                          {stop, normal, NewStateData :: statedata()}.
 handle_event(_Msg, _StateName, State) ->
     {stop, normal, State}.
 
@@ -524,6 +560,8 @@ handle_event(_Msg, _StateName, State) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-spec invoke(M :: term(), Mod :: term(), Fun :: fun(), Args :: list()) ->
+                    {Value :: term()}.
 invoke(M, Mod, Fun, Args) ->
     case gen_fsm:sync_send_event(M, {invokation, Mod, Fun, Args, self()}) of
         {return, Value} ->
