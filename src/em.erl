@@ -5,23 +5,23 @@
 %%% The module name 'em' stands for 'Erly Mock'.
 %%%
 %%% <p>This mocking library works similar to Easymock.</p>
-%%% 
+%%%
 %%% <p>After a mock process is started by <code>new/0</code> it can be
-%%% programmed to expect function calls and to react to them in two 
-%%% ways: <ul><li>by returning a value</li><li>by executing an arbitrary 
-%%% function</li></ul> 
+%%% programmed to expect function calls and to react to them in two
+%%% ways: <ul><li>by returning a value</li><li>by executing an arbitrary
+%%% function</li></ul>
 %%% This is done with <code>strict/4, strict/5, stub/4, stub/5</code>.
 %%% </p>
 %%%
 %%% <p>Before the code under test is executed, the mock must be told
 %%% that the programming phase is over by <code>replay/1</code>.</p>
 %%%
-%%% <p>In the next phase the code under test is run, and might or 
+%%% <p>In the next phase the code under test is run, and might or
 %%% might not call the functions mocked.
-%%% The mock process checks that all functions programmed with 
+%%% The mock process checks that all functions programmed with
 %%% <code>strict/4, strict/5</code>are called in the
 %%% correct order, with the expected arguments and reacts in the way
-%%% defined during the programming phase. If a mocked function is called 
+%%% defined during the programming phase. If a mocked function is called
 %%% although another function was expected, or if an expected function
 %%% was called with different arguments, the mock process dies and
 %%% prints a comprehensive error message before failing the test.</p>
@@ -31,14 +31,14 @@
 %%% and to remove all modules, that were dynamically created and loaded
 %%% during the programming phase.</p>
 %%%
-%%% NOTE: This library works by purging the modules mocked and replacing 
+%%% NOTE: This library works by purging the modules mocked and replacing
 %%% them with dynamically created and compiled code, so be careful what
 %%% you mock, i.e. it brings chaos to mock modules from kernel. This also
 %%% implies, that tests that mock the same modules must be run sequentially.
 %%%
 %%% Apart from that, it is very advisable to <b>only mock owned modules</b>
 %%% anyway.
-%%% 
+%%%
 %%% @end
 %%%-----------------------------------------------------------------------------
 %%% Copyright (c) 2011 Sven Heyll
@@ -49,10 +49,10 @@
 %%% to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 %%% copies of the Software, and to permit persons to whom the Software is
 %%% furnished to do so, subject to the following conditions:
-%%% 
+%%%
 %%% The above copyright notice and this permission notice shall be included in
 %%% all copies or substantial portions of the Software.
-%%% 
+%%%
 %%% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 %%% IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 %%% FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -60,7 +60,7 @@
 %%% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 %%% OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 %%% THE SOFTWARE.
-%%% 
+%%%
 %%%-----------------------------------------------------------------------------
 
 -module(em).
@@ -106,7 +106,7 @@
 %%------------------------------------------------------------------------------
 %% The type that defines the argument list passed to strict() or stub().
 %% Each list element is either a value that will be matched to the actual value
-%% of the parameter at that position, or a predicate function which will be 
+%% of the parameter at that position, or a predicate function which will be
 %% applied to the actual argument.
 %%------------------------------------------------------------------------------
 -type args() :: [ fun((any()) ->
@@ -115,7 +115,7 @@
 
 %%------------------------------------------------------------------------------
 %% The type that defines the response to a mocked function call. A response is
-%% either that a value is returned, or the application of a function to the 
+%% either that a value is returned, or the application of a function to the
 %% actual arguments.
 %%------------------------------------------------------------------------------
 -type answer() :: {function, fun(([any()]) -> any())}
@@ -130,13 +130,13 @@
 %% Spawns a linked mock process and returns it's pid. This is usually the first
 %% thing to do in each unit test. The resulting pid is used in the other
 %% functions below. NOTE: only a single mock proccess is required for a single
-%% unit test case. One mock process can mock an arbitrary number of different 
+%% unit test case. One mock process can mock an arbitrary number of different
 %% modules.
 %% When the mock process dies, all uploaded modules are purged from the code
 %% server, and all cover compiled modules are restored.
 %% When the process that started the mock exits, the mock automatically cleans
 %% up and exits.
-%% After new() the mock is in 'programming' state. 
+%% After new() the mock is in 'programming' state.
 %% @end
 %%------------------------------------------------------------------------------
 -spec new() ->
@@ -148,7 +148,7 @@ new() ->
 %%------------------------------------------------------------------------------
 %% @doc
 %% Adds an expectation during the programming phase for a specific functiion
-%% invokation. 
+%% invokation.
 %% <p>All expectations defined by 'strict' define an order in which the
 %% application must call the mocked functions, hence the name 'strict' as oposed
 %% to 'stub' (see below).</p>
@@ -157,9 +157,9 @@ new() ->
 %% <li><code>M</code> the mock pid, returned by <code>new/0</code></li>
 %% <li><code>Mod</code> the module of the function to mock</li>
 %% <li><code>Fun</code> the name of the function to mock</li>
-%% <li><code>Args</code> a list of expected arguments. 
-%% Each list element is either a value that will be matched to the actual value 
-%% of the parameter at that position, or a predicate function which will be 
+%% <li><code>Args</code> a list of expected arguments.
+%% Each list element is either a value that will be matched to the actual value
+%% of the parameter at that position, or a predicate function which will be
 %% applied to the actual argument.</li>
 %% </ul></p>
 %% <p>
@@ -184,18 +184,18 @@ strict(M, Mod, Fun, Args)
 %% and additionally accepts a return value or an answer function. That parameter
 %% <code>Answer</code> may be:
 %% <ul>
-%% <li><code>{return, SomeValue}</code> This causes the mocked function invocation to 
+%% <li><code>{return, SomeValue}</code> This causes the mocked function invocation to
 %% return the specified value.</li>
 %% <li><code>{function, fun(([Arg1, ... , ArgN]) -> SomeValue)}</code> This defines
-%% a function to be called when the mocked invokation happens. 
+%% a function to be called when the mocked invokation happens.
 %% That function is applied to all captured actual arguments.  For convenience these
-%% are passed as a list, so the user can simply write <code>fun(_) -> ...</code> 
+%% are passed as a list, so the user can simply write <code>fun(_) -> ...</code>
 %% when the actual values are not needed.
 %% The function will be executed by the process that calls the mocked function, not
-%% by the mock process. Hence the function may access <code>self()</code> and may 
+%% by the mock process. Hence the function may access <code>self()</code> and may
 %% throw an exception, which will then correctly appear in the process under test,
 %% allowing unit testing of exception handling.
-%% Otherwise the value returned by the function is passed through as the value 
+%% Otherwise the value returned by the function is passed through as the value
 %% returned from the invocation.
 %% </li>
 %% </ul>
@@ -224,7 +224,7 @@ strict(M, Mod, Fun, Args, Answer = {function, _})
 stub(M, Mod, Fun, Args)
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
     stub(M, Mod, Fun, Args, {return, ok}).
-    
+
 %%------------------------------------------------------------------------------
 %% @doc
 %% This is similar <code>stub/4</code> except that it, like
@@ -268,9 +268,9 @@ lock(M, Mods) when is_pid(M), is_list(Mods) ->
 
 %%------------------------------------------------------------------------------
 %% @doc
-%% Finishes the programming phase and switches to the replay phase where the 
+%% Finishes the programming phase and switches to the replay phase where the
 %% actual code under test may run and invoke the functions mocked. This may
-%% be called only once, and only in the programming phase. This also loads 
+%% be called only once, and only in the programming phase. This also loads
 %% (or replaces) the modules of the functions mocked.
 %% In the replay phase the code under test may call all mocked functions.
 %% If the application calls a mocked function with invalid arguments, or
@@ -285,7 +285,7 @@ replay(M) ->
 %%------------------------------------------------------------------------------
 %% @doc
 %% Finishes the replay phase. If the code under test did not cause all expected
-%% invokations defined by <code>strict/4</code> or <code>strict/5</code>, the 
+%% invokations defined by <code>strict/4</code> or <code>strict/5</code>, the
 %% call will fail with <code>badmatch</code> with a comprehensive error message.
 %% Otherwise the mock process exits normally, returning <code>ok</code>.
 %% @end
@@ -315,9 +315,9 @@ any() ->
 %% process, that calls the funtion during the replay phase.
 %% @end
 %%------------------------------------------------------------------------------
--spec zelf() -> 
+-spec zelf() ->
                   atom().
-zelf() -> 
+zelf() ->
     '$$em zelf$$'.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -351,6 +351,7 @@ zelf() ->
 -spec init([TestProc :: term()]) ->
                   {ok, atom(), StateData :: statedata()}.
 init([TestProc]) ->
+    process_flag(sensitive, true),
     {ok,
      programming,
      #state{
@@ -392,7 +393,7 @@ programming({nothing, Mod},
      ok,
      programming,
      State#state{
-       blacklist = [Mod | BL]}};	   
+       blacklist = [Mod | BL]}};
 
 programming(replay,
             _From,
@@ -443,7 +444,7 @@ replaying(I = {invokation, Mod, Fun, Args, IPid},
              Answer,
              case Rest of
                  [] -> no_expectations;
-                 _ ->                     
+                 _ ->
                      replaying
              end,
              State#state{
@@ -466,11 +467,11 @@ replaying(I = {invokation, _M, _F, _A, _IPid},
     gen_fsm:cancel_timer(InvTORef),
     case handle_stub_invokation(I, State#state.stub) of
 	{ok, Answer} ->
-	    {reply, Answer, replaying, 
+	    {reply, Answer, replaying,
              State#state{
                inv_to_ref = gen_fsm:start_timer(?INVOKATION_TIMEOUT, invokation_timeout)
               }};
-	
+
 	error ->
 	    Reason = {unexpected_invokation, {actual, I}, {expected, E}},
 	    {stop, Reason, Reason, State}
@@ -676,20 +677,20 @@ check_args(Args, ArgSpecs, InvokationPid) ->
                              ok;
                          _ ->
                              throw({error, I, E, A})
-                     end;                  
+                     end;
                  true ->
                      case E of
-                         
-                         '$$em zelf$$' -> 
-                             if A =/= InvokationPid -> 
+
+                         '$$em zelf$$' ->
+                             if A =/= InvokationPid ->
                                      throw({error, I, E, A});
                                 true ->
                                      ok
                              end;
-                         
+
                          A ->
                              ok;
-                         
+
                          _Otherwise ->
                              throw({error, I, E, A})
                      end
