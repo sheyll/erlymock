@@ -6,7 +6,7 @@
 %%% @doc
 %%% Internal server that provides a locking mechanism between em processes so that
 %%% no two mock processes mock the same modules.
-%%% A mock process locks some modules and as soon as the mock process dies, its 
+%%% A mock process locks some modules and as soon as the mock process dies, its
 %%% modules will automatically be unlocked.
 %%% @end
 %%%=============================================================================
@@ -19,16 +19,16 @@
 -export([lock/2]).
 
 %% gen_server callbacks
--export([init/1, 
-         handle_call/3, 
-         handle_cast/2, 
+-export([init/1,
+         handle_call/3,
+         handle_cast/2,
          handle_info/2,
-         terminate/2, 
+         terminate/2,
          code_change/3]).
 
--define(SERVER, ?MODULE). 
+-define(SERVER, ?MODULE).
 
--record(state, 
+-record(state,
         {locked_modules = [] :: [module()],
          timers         = dict:new(),
          locking_mocks  = [] :: [{pid(), [module()], term()}],
@@ -80,30 +80,30 @@ init([]) ->
 %%------------------------------------------------------------------------------
 -spec handle_call(Request :: term(), From :: term(), State :: state()) ->
                          {reply, Reply :: term(), NewState :: state()} |
-                         term().
-handle_call({lock, MockPid, Mods}, From, 
+                         {stop, term(), term(), term()}.
+handle_call({lock, MockPid, Mods}, From,
             State = #state{}) ->
     monitor(process, MockPid),
     NewState = State#state{waiting_mocks = [{MockPid, Mods, From} | State#state.waiting_mocks]},
     em_module_locker:handle_cast(perform_locking, NewState);
 
-handle_call(_Request, _From, State) ->
-    utils:default_handle_call(State).
+handle_call(Request, _From, State) ->
+    {stop, {undefined, Request}, {unexpected_call, Request}, State}.
 
 -spec handle_cast(Msg :: term(), State :: state()) ->
                          {noreply, NewState :: state()} |
-                         term().
+                         {stop, term(), term()}.
 handle_cast(perform_locking,
             State) ->
-    Mocks_To_Reply = [M || M = {_, Mods, _} <- State#state.waiting_mocks, 
+    Mocks_To_Reply = [M || M = {_, Mods, _} <- State#state.waiting_mocks,
                            (Mods -- (State#state.locked_modules)) == Mods],
-    NewState = lists:foldr(fun(M = {MockPid, Mods, From}, StateAcc) -> 
+    NewState = lists:foldr(fun(M = {MockPid, Mods, From}, StateAcc) ->
                                    {ok, TRef} = timer:kill_after(?MAX_LOCK_TIME, MockPid),
                                    gen_server:reply(From, ok),
                                    StateAcc#state{
                                      timers =
                                          dict:store(MockPid, TRef, StateAcc#state.timers),
-                                     locked_modules = 
+                                     locked_modules =
                                          StateAcc#state.locked_modules ++ Mods,
                                      waiting_mocks =
                                          StateAcc#state.waiting_mocks -- [M],
@@ -114,25 +114,24 @@ handle_cast(perform_locking,
                            Mocks_To_Reply),
     {noreply, NewState};
 
-handle_cast(_Request, State) ->
-    utils:default_handle_cast(State).
+handle_cast(Request, State) ->
+    {stop, {unexpected_cast, Request}, State}.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
 -spec handle_info(Info :: term(), State :: state()) ->
-                         {noreply, State :: state()} |
-                         term().
-handle_info({'DOWN', _Ref, process, Pid, _Reason}, 
+                         {noreply, State :: state()} | {stop, term(), term()}.
+handle_info({'DOWN', _Ref, process, Pid, _Reason},
             StateWithTimers = #state{timers = Timers}) ->
     State = case dict:find(Pid, Timers) of
                 {ok, TRef} ->
                     timer:cancel(TRef),
                     StateWithTimers#state{timers = dict:erase(Pid, Timers)};
-                _ -> 
+                _ ->
                     StateWithTimers
     end,
-    Mocks_To_Unlock = [M || M = {P, _, _} <- State#state.locking_mocks, 
+    Mocks_To_Unlock = [M || M = {P, _, _} <- State#state.locking_mocks,
                             P == Pid],
     Mods_To_Unlock = [Mod || {_, Mods, _} <- Mocks_To_Unlock,
                             Mod <- Mods],
@@ -140,13 +139,13 @@ handle_info({'DOWN', _Ref, process, Pid, _Reason},
     Mocks_Not_Waiting_Anymore = [M || M = {P, _, _} <- State#state.waiting_mocks,
                                      P == Pid],
     gen_server:cast(?MODULE, perform_locking),
-    {noreply, 
+    {noreply,
      State#state{locked_modules = State#state.locked_modules -- Mods_To_Unlock,
                  locking_mocks = State#state.locking_mocks -- Mocks_To_Unlock,
                  waiting_mocks = State#state.waiting_mocks -- Mocks_Not_Waiting_Anymore}};
-    
+
 handle_info(Info, State) ->
-    utils:default_handle_info(erlymock, Info, ?MODULE, State).
+    {stop, {unexpected_info, Info}, State}.
 
 %%------------------------------------------------------------------------------
 %% @private
