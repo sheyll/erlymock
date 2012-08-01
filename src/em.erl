@@ -352,6 +352,7 @@ zelf() ->
                   {ok, atom(), StateData :: statedata()}.
 init([TestProc]) ->
     process_flag(sensitive, true),
+    erlang:trace(self(), false, [all]),
     {ok,
      programming,
      #state{
