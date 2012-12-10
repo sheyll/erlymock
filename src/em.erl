@@ -26,10 +26,15 @@
 %%% was called with different arguments, the mock process dies and
 %%% prints a comprehensive error message before failing the test.</p>
 %%%
-%%% <p>At the end of a unit test <code>verify/1</code> is called to
-%%% check for missing invocations at the end of the programming phase
-%%% and to remove all modules, that were dynamically created and loaded
-%%% during the programming phase.</p>
+%%% <p>At the end of a unit test {@link await_expectations/1} is called to
+%%% await all invocations defined during the programming phase.</p>
+%%%
+%%% <p>An alternative to {@link await_expectations/1} is {@link verify/1}. It is
+%%% called to check for missing invocations at the end of the programming phase,
+%%% if any expected invocations are missing at verify will throw an exception.</p>
+%%%
+%%% <p>When the mock process exits it tries hard to remove all modules, that
+%%% were dynamically created and loaded during the programming phase.</p>
 %%%
 %%% NOTE: This library works by purging the modules mocked and replacing
 %%% them with dynamically created and compiled code, so be careful what
@@ -41,7 +46,7 @@
 %%%
 %%% @end
 %%%-----------------------------------------------------------------------------
-%%% Copyright (c) 2011 Sven Heyll
+%%% Copyright (c) 2011,2012 Sven Heyll
 %%%
 %%% Permission is hereby granted, free of charge, to any person obtaining a copy
 %%% of this software and associated documentation files (the "Software"), to deal
@@ -74,6 +79,7 @@
          stub/4,
          stub/5,
          replay/1,
+         await_expectations/1,
          verify/1,
          any/0,
          zelf/0,
@@ -284,6 +290,17 @@ replay(M) ->
 
 %%------------------------------------------------------------------------------
 %% @doc
+%% Wait until all invokations defined during the programming phase were made.
+%% After this functions returns, the mock can be expected to exit and clean up
+%% all modules installed.
+%% @end
+%%------------------------------------------------------------------------------
+-spec await_expectations(M :: term()) -> ok.
+await_expectations(M) ->
+    ok = gen_fsm:sync_send_all_state_event(M, await_expectations, 5000).
+
+%%------------------------------------------------------------------------------
+%% @doc
 %% Finishes the replay phase. If the code under test did not cause all expected
 %% invokations defined by <code>strict/4</code> or <code>strict/5</code>, the
 %% call will fail with <code>badmatch</code> with a comprehensive error message.
@@ -336,7 +353,8 @@ zelf() ->
           strict :: [#expectation{}],
           stub  :: [#expectation{}],
 	  blacklist :: [atom()],
-          mocked_modules :: [{atom(), {just, term()}|nothing}]
+          mocked_modules :: [{atom(), {just, term()}|nothing}],
+          await_invokations_reply = nothing :: nothing | {just, term()}
          }).
 
 -type statedata() :: #state{}.
@@ -428,8 +446,9 @@ replaying({timeout, Ref, invokation_timeout},
                        {stop, Reason :: term(), Reply :: term(),
                         NewStateData :: statedata()}.
 replaying(I = {invokation, Mod, Fun, Args, IPid},
-          _From,
+          From,
           State = #state{
+            await_invokations_reply = AwInvRepl,
             inv_to_ref = InvTORef,
             strict = [#expectation{
                         m      = Mod,
@@ -441,16 +460,23 @@ replaying(I = {invokation, Mod, Fun, Args, IPid},
     gen_fsm:cancel_timer(InvTORef),
     case check_args(Args, EArgs, IPid) of
         true ->
-            {reply,
-             Answer,
-             case Rest of
-                 [] -> no_expectations;
-                 _ ->
-                     replaying
-             end,
-             State#state{
-               inv_to_ref = gen_fsm:start_timer(?INVOKATION_TIMEOUT, invokation_timeout),
-               strict=Rest}};
+            gen_fsm:reply(From, Answer),
+            NextState = case Rest of
+                            [] -> no_expectations;
+                            _ ->
+                                replaying
+                        end,
+            if NextState =:= replaying orelse AwInvRepl =:= nothing ->
+                    NextTimer = gen_fsm:start_timer(?INVOKATION_TIMEOUT,
+                                                    invokation_timeout),
+                    {next_state, NextState,
+                     State#state{inv_to_ref = NextTimer,
+                                 strict=Rest}};
+               true ->
+                    {just, AIR} = AwInvRepl,
+                    gen_fsm:reply(AIR, ok),
+                    {stop, normal, State}
+            end;
         {error, Index, Expected, Actual} ->
             Reason = {unexpected_function_parameter,
                       {error_in_parameter, Index},
@@ -533,7 +559,14 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%------------------------------------------------------------------------------
 -spec handle_sync_event(Event :: term(), From :: term(), StateName :: atom(),
                         StateData :: statedata()) ->
-                               {stop, normal, ok, NewStateData :: statedata()}.
+                               {stop, normal, ok, NewStateData :: statedata()}
+                                   | {next_state, StateName :: atom(),
+                                      NewStateData :: statedata()}.
+handle_sync_event(await_expectations, _From, no_expectations, State) ->
+    {stop, normal, ok, State};
+handle_sync_event(await_expectations, From, StateName,
+                  State =  #state{await_invokations_reply = nothing}) ->
+    {next_state, StateName, State#state{await_invokations_reply = {just, From}}};
 handle_sync_event(_Evt, _From, _StateName, State) ->
     {stop, normal, ok, State}.
 

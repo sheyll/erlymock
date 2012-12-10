@@ -244,3 +244,22 @@ em_zelf_test() ->
     em:replay(M),
     mod:f(self()),
     em:verify(M).
+
+await_expectations_noexpectations_test() ->
+    M = em:new(),
+    Test = self(),
+    em:strict(M, mod, f, [],
+             {function, fun(_) -> Test ! go_on end}),
+    em:replay(M),
+    mod:f(),
+    receive go_on -> ok end,
+    em:await_expectations(M).
+
+await_expectations_test() ->
+    M = em:new(),
+    Test = self(),
+    em:strict(M, mod, f, [],
+             {function, fun(_) -> Test ! go_on end}),
+    em:replay(M),
+    spawn(fun() -> receive after 200 -> mod:f() end end),
+    em:await_expectations(M).
