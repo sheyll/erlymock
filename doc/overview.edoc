@@ -75,7 +75,7 @@ launche_missle_test() ->
 </pre>
 
 Another example shall show the usefulness of {@link em:await_expectations/1}
-instead of {@link em:verify/1} to wait for asynchronouse invokations and {@link
+instead of {@link em:verify/1} to wait for asynchronous invokations and {@link
 em:zelf/1} as argument matcher matching the process id of the process calling
 the mocked functions in the replay phase.
 

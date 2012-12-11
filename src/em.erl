@@ -1,25 +1,25 @@
 %%%-----------------------------------------------------------------------------
 %%% @author Sven Heyll <sven.heyll@lindenbaum.eu>
-%%% @copyright (C) 2011, Sven Heyll
+%%% @copyright (C) 2011, 2012 Sven Heyll
 %%% @doc
 %%% The module name 'em' stands for 'Erly Mock'.
 %%%
 %%% <p>This mocking library works similar to Easymock.</p>
 %%%
-%%% <p>After a mock process is started by <code>new/0</code> it can be
+%%% <p>After a mock process is started by {@link new/0} it can be
 %%% programmed to expect function calls and to react to them in two
 %%% ways: <ul><li>by returning a value</li><li>by executing an arbitrary
 %%% function</li></ul>
-%%% This is done with <code>strict/4, strict/5, stub/4, stub/5</code>.
+%%% This is done with {@link strict/4}, {@link strict/5}, {@link stub/4}, {@link stub/5}
 %%% </p>
 %%%
 %%% <p>Before the code under test is executed, the mock must be told
-%%% that the programming phase is over by <code>replay/1</code>.</p>
+%%% that the programming phase is over by {@link replay/1}.</p>
 %%%
 %%% <p>In the next phase the code under test is run, and might or
 %%% might not call the functions mocked.
 %%% The mock process checks that all functions programmed with
-%%% <code>strict/4, strict/5</code>are called in the
+%%% {@link strict/4}, {@link strict/5} are called in the
 %%% correct order, with the expected arguments and reacts in the way
 %%% defined during the programming phase. If a mocked function is called
 %%% although another function was expected, or if an expected function
@@ -160,7 +160,7 @@ new() ->
 %% to 'stub' (see below).</p>
 %% <p>The parameters are:
 %% <ul>
-%% <li><code>M</code> the mock pid, returned by <code>new/0</code></li>
+%% <li><code>M</code> the mock pid, returned by {@link new/0}</li>
 %% <li><code>Mod</code> the module of the function to mock</li>
 %% <li><code>Fun</code> the name of the function to mock</li>
 %% <li><code>Args</code> a list of expected arguments.
@@ -171,11 +171,11 @@ new() ->
 %% <p>
 %% The return value, that the application will get when calling the mocked
 %% function is simply the atom <code>ok</code>. This differentiates this
-%% function from <code>strict/5</code>, which allows the definition of a
+%% function from {@link strict/5}, which allows the definition of a
 %% custom response function or a custom return value.
 %% </p>
 %% NOTE: This function may only be called between <code>new/0</code> and
-%% <code>replay/1</code> - that is during the programming phase.
+%% {@link replay/1} - that is during the programming phase.
 %% @end
 %%------------------------------------------------------------------------------
 -spec strict(pid(), atom(), atom(), args()) ->
@@ -186,7 +186,7 @@ strict(M, Mod, Fun, Args)
 
 %%------------------------------------------------------------------------------
 %% @doc
-%% This function behaves like <code>strict/4</code>
+%% This function behaves like {@link strict/4}
 %% and additionally accepts a return value or an answer function. That parameter
 %% <code>Answer</code> may be:
 %% <ul>
@@ -205,7 +205,6 @@ strict(M, Mod, Fun, Args)
 %% returned from the invocation.
 %% </li>
 %% </ul>
-%% @see strict/4. <code>strict/4</code>
 %% @end
 %%------------------------------------------------------------------------------
 -spec strict(pid(), atom(), atom(), args(), answer()) ->
@@ -302,7 +301,7 @@ await_expectations(M) ->
 %%------------------------------------------------------------------------------
 %% @doc
 %% Finishes the replay phase. If the code under test did not cause all expected
-%% invokations defined by <code>strict/4</code> or <code>strict/5</code>, the
+%% invokations defined by {@link strict/4} or {@link strict/5}, the
 %% call will fail with <code>badmatch</code> with a comprehensive error message.
 %% Otherwise the mock process exits normally, returning <code>ok</code>.
 %% @end
@@ -328,7 +327,7 @@ any() ->
 %%------------------------------------------------------------------------------
 %% @doc
 %% Utility function that can be used as a match function in an
-%% argument list to match self(), e.g. when it matches the pid of the
+%% argument list to match <code>self()</code>, e.g. when it matches the pid of the
 %% process, that calls the funtion during the replay phase.
 %% @end
 %%------------------------------------------------------------------------------
