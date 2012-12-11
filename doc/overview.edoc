@@ -38,21 +38,21 @@ beginning of a unit test.
 <p>Assume there are two modules, used by the code to be tested, that shall be mocked (at least to prevent damaging side effects):</p>
 
 A rocket launcher server:
-<code>
+<pre>
 -module(rocket_launcher).
 
 launch(Longitude, Latitude, Type) ->
  ....
-</code>
+</pre>
 And A UI module:
-<code>
+<pre>
 -module(rocket_launcher_ui).
 
 ask_for_instructions() ->
  ...
-</code>
+</pre>
 Then this is how a happy case unit test might look like:
-<code>
+<pre>
 launche_missle_test() ->
    % create a new mock process
    M = em:new(),
@@ -72,14 +72,14 @@ launche_missle_test() ->
 
    % verify expectations immediately
    em:verify(M).
-</code>
+</pre>
 
 Another example shall show the usefulness of {@link em:await_expectations/1}
 instead of {@link em:verify/1} to wait for asynchronouse invokations and {@link
 em:zelf/1} as argument matcher matching the process id of the process calling
 the mocked functions in the replay phase.
 
-<code>
+<pre>
 
 %% Let's look at the impl first:
 -module(xxx_impl).
@@ -121,7 +121,7 @@ downld_img_test() ->
     %% await the cast to happen:
     em:await_expectations(M).
 
-</code>
+</pre>
 
 <strong>For more details please read the {@link em} module documentation.</strong>
 
