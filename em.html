@@ -1,0 +1,272 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Module em</title>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
+</head>
+<body bgcolor="white">
+<div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<hr>
+
+<h1>Module em</h1>
+<ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>   
+The module name 'em' stands for 'Erly Mock'.
+<p>Copyright © (C) 2011, Sven Heyll</p>
+
+<p><b>Behaviours:</b> <a href="gen_fsm.html"><tt>gen_fsm</tt></a>.</p>
+<p><b>Authors:</b> Sven Heyll (<a href="mailto:sven.heyll@lindenbaum.eu"><tt>sven.heyll@lindenbaum.eu</tt></a>).</p>
+
+<h2><a name="description">Description</a></h2><p>   
+The module name 'em' stands for 'Erly Mock'.</p>
+  
+   <p>This mocking library works similar to Easymock.</p>
+  
+   <p>After a mock process is started by <code>new/0</code> it can be
+   programmed to expect function calls and to react to them in two
+   ways: <ul><li>by returning a value</li><li>by executing an arbitrary
+   function</li></ul>
+   This is done with <code>strict/4, strict/5, stub/4, stub/5</code>.
+   </p>
+  
+   <p>Before the code under test is executed, the mock must be told
+   that the programming phase is over by <code>replay/1</code>.</p>
+  
+   <p>In the next phase the code under test is run, and might or
+   might not call the functions mocked.
+   The mock process checks that all functions programmed with
+   <code>strict/4, strict/5</code>are called in the
+   correct order, with the expected arguments and reacts in the way
+   defined during the programming phase. If a mocked function is called
+   although another function was expected, or if an expected function
+   was called with different arguments, the mock process dies and
+   prints a comprehensive error message before failing the test.</p>
+  
+   <p>At the end of a unit test <a href="#await_expectations-1"><code>await_expectations/1</code></a> is called to
+   await all invocations defined during the programming phase.</p>
+  
+   <p>An alternative to <a href="#await_expectations-1"><code>await_expectations/1</code></a> is <a href="#verify-1"><code>verify/1</code></a>. It is
+   called to check for missing invocations at the end of the programming phase,
+   if any expected invocations are missing at verify will throw an exception.</p>
+  
+   <p>When the mock process exits it tries hard to remove all modules, that
+   were dynamically created and loaded during the programming phase.</p>
+  
+   <p>NOTE: This library works by purging the modules mocked and replacing   
+them with dynamically created and compiled code, so be careful what   
+you mock, i.e. it brings chaos to mock modules from kernel. This also   
+implies, that tests that mock the same modules must be run sequentially.</p>
+  
+   Apart from that, it is very advisable to <b>only mock owned modules</b>
+   anyway.
+  
+<h2><a name="types">Data Types</a></h2>
+
+<h3 class="typedecl"><a name="type-answer">answer()</a></h3>
+<p><tt>answer() = {function, fun(([any()]) -&gt; any())} | {return, any()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-args">args()</a></h3>
+<p><tt>args() = [fun((any()) -&gt; true | false) | term()]</tt></p>
+
+
+<h3 class="typedecl"><a name="type-statedata">statedata()</a></h3>
+<p><tt>statedata() = #state{}</tt></p>
+
+
+<h2><a name="index">Function Index</a></h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#any-0">any/0</a></td><td>
+  Utility function that can be used as a match function in an argument list
+  to match any value.</td></tr>
+<tr><td valign="top"><a href="#await_expectations-1">await_expectations/1</a></td><td>
+  Wait until all invokations defined during the programming phase were made.</td></tr>
+<tr><td valign="top"><a href="#lock-2">lock/2</a></td><td>
+  The function will block until all modules in the list are not
+  mocked by another erlymock process.</td></tr>
+<tr><td valign="top"><a href="#new-0">new/0</a></td><td>
+  Spawns a linked mock process and returns it's pid.</td></tr>
+<tr><td valign="top"><a href="#nothing-2">nothing/2</a></td><td>
+  This is used to express the expectation that no function of a certain module
+  is called.</td></tr>
+<tr><td valign="top"><a href="#replay-1">replay/1</a></td><td>
+  Finishes the programming phase and switches to the replay phase where the
+  actual code under test may run and invoke the functions mocked.</td></tr>
+<tr><td valign="top"><a href="#replaying-3">replaying/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#strict-4">strict/4</a></td><td>
+  Adds an expectation during the programming phase for a specific functiion
+  invokation.</td></tr>
+<tr><td valign="top"><a href="#strict-5">strict/5</a></td><td>
+  This function behaves like <code>strict/4</code>
+  and additionally accepts a return value or an answer function.</td></tr>
+<tr><td valign="top"><a href="#stub-4">stub/4</a></td><td>
+  Defines a what happens when a function is called whithout recording any
+  expectations.</td></tr>
+<tr><td valign="top"><a href="#stub-5">stub/5</a></td><td>
+  This is similar <code>stub/4</code> except that it, like
+  <code>strict/5</code> allows the definition of a return value
+  or an answer function.</td></tr>
+<tr><td valign="top"><a href="#verify-1">verify/1</a></td><td>
+  Finishes the replay phase.</td></tr>
+<tr><td valign="top"><a href="#zelf-0">zelf/0</a></td><td>
+  Utility function that can be used as a match function in an
+  argument list to match self(), e.g.</td></tr>
+</table>
+
+<h2><a name="functions">Function Details</a></h2>
+
+<h3 class="function"><a name="any-0">any/0</a></h3>
+<div class="spec">
+<p><tt>any() -&gt; fun((any()) -&gt; true)</tt><br></p>
+</div><p>
+  Utility function that can be used as a match function in an argument list
+  to match any value.</p>
+
+<h3 class="function"><a name="await_expectations-1">await_expectations/1</a></h3>
+<div class="spec">
+<p><tt>await_expectations(M::term()) -&gt; ok</tt><br></p>
+</div><p>
+  Wait until all invokations defined during the programming phase were made.
+  After this functions returns, the mock can be expected to exit and clean up
+  all modules installed.</p>
+
+<h3 class="function"><a name="lock-2">lock/2</a></h3>
+<div class="spec">
+<p><tt>lock(M::pid(), Mods::[atom()]) -&gt; ok</tt><br></p>
+</div><p>
+  The function will block until all modules in the list are not
+  mocked by another erlymock process.</p>
+
+<h3 class="function"><a name="new-0">new/0</a></h3>
+<div class="spec">
+<p><tt>new() -&gt; pid()</tt><br></p>
+</div><p>
+  Spawns a linked mock process and returns it's pid. This is usually the first
+  thing to do in each unit test. The resulting pid is used in the other
+  functions below. NOTE: only a single mock proccess is required for a single
+  unit test case. One mock process can mock an arbitrary number of different
+  modules.
+  When the mock process dies, all uploaded modules are purged from the code
+  server, and all cover compiled modules are restored.
+  When the process that started the mock exits, the mock automatically cleans
+  up and exits.
+  After new() the mock is in 'programming' state.</p>
+
+<h3 class="function"><a name="nothing-2">nothing/2</a></h3>
+<div class="spec">
+<p><tt>nothing(M::pid(), Mod::atom()) -&gt; ok</tt><br></p>
+</div><p>
+  This is used to express the expectation that no function of a certain module
+  is called. This will cause each function call on a module to throw an 'undef'
+  exception.</p>
+
+<h3 class="function"><a name="replay-1">replay/1</a></h3>
+<div class="spec">
+<p><tt>replay(M::term()) -&gt; ok</tt><br></p>
+</div><p>
+  Finishes the programming phase and switches to the replay phase where the
+  actual code under test may run and invoke the functions mocked. This may
+  be called only once, and only in the programming phase. This also loads
+  (or replaces) the modules of the functions mocked.
+  In the replay phase the code under test may call all mocked functions.
+  If the application calls a mocked function with invalid arguments, or
+  if the application calls a function not expected on a mocked module, the mock
+  process dies and - if used in a typical edoc test suite - fails the test.</p>
+
+<h3 class="function"><a name="replaying-3">replaying/3</a></h3>
+<div class="spec">
+<p><tt>replaying(Event::term(), From::term(), StateData::<a href="#type-statedata">statedata()</a>) -&gt; {reply, Reply::term(), NextState::atom(), NewStateData::<a href="#type-statedata">statedata()</a>} | {stop, Reason::term(), Reply::term(), NewStateData::<a href="#type-statedata">statedata()</a>}</tt><br></p>
+</div>
+
+<h3 class="function"><a name="strict-4">strict/4</a></h3>
+<div class="spec">
+<p><tt>strict(M::pid(), Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>) -&gt; ok</tt><br></p>
+</div><p>
+  Adds an expectation during the programming phase for a specific functiion
+  invokation.
+  <p>All expectations defined by 'strict' define an order in which the
+  application must call the mocked functions, hence the name 'strict' as oposed
+  to 'stub' (see below).</p>
+  <p>The parameters are:
+  <ul>
+  <li><code>M</code> the mock pid, returned by <code>new/0</code></li>
+  <li><code>Mod</code> the module of the function to mock</li>
+  <li><code>Fun</code> the name of the function to mock</li>
+  <li><code>Args</code> a list of expected arguments.
+  Each list element is either a value that will be matched to the actual value
+  of the parameter at that position, or a predicate function which will be
+  applied to the actual argument.</li>
+  </ul></p>
+  <p>
+  The return value, that the application will get when calling the mocked
+  function is simply the atom <code>ok</code>. This differentiates this
+  function from <code>strict/5</code>, which allows the definition of a
+  custom response function or a custom return value.
+  </p>
+  NOTE: This function may only be called between <code>new/0</code> and
+  <code>replay/1</code> - that is during the programming phase.</p>
+
+<h3 class="function"><a name="strict-5">strict/5</a></h3>
+<div class="spec">
+<p><tt>strict(M::pid(), Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>, Answer::<a href="#type-answer">answer()</a>) -&gt; ok</tt><br></p>
+</div><p>
+  This function behaves like <code>strict/4</code>
+  and additionally accepts a return value or an answer function. That parameter
+  <code>Answer</code> may be:
+  <ul>
+  <li><code>{return, SomeValue}</code> This causes the mocked function invocation to
+  return the specified value.</li>
+  <li><code>{function, fun(([Arg1, ... , ArgN]) -&gt; SomeValue)}</code> This defines
+  a function to be called when the mocked invokation happens.
+  That function is applied to all captured actual arguments.  For convenience these
+  are passed as a list, so the user can simply write <code>fun(_) -&gt; ...</code>
+  when the actual values are not needed.
+  The function will be executed by the process that calls the mocked function, not
+  by the mock process. Hence the function may access <code>self()</code> and may
+  throw an exception, which will then correctly appear in the process under test,
+  allowing unit testing of exception handling.
+  Otherwise the value returned by the function is passed through as the value
+  returned from the invocation.
+  </li>
+  </ul></p>
+<p><b>See also:</b> <a href="#strict-4"><code>strict/4</code></a>.</p>
+
+<h3 class="function"><a name="stub-4">stub/4</a></h3>
+<div class="spec">
+<p><tt>stub(M::pid(), Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>) -&gt; ok</tt><br></p>
+</div><p>
+  Defines a what happens when a function is called whithout recording any
+  expectations. The invocations defined by this function may happen in any order
+  any number of times. The way, the invocation is defined is analog to</p>
+<p><b>See also:</b> <a href="#strict-4"><code>strict/4</code></a>.</p>
+
+<h3 class="function"><a name="stub-5">stub/5</a></h3>
+<div class="spec">
+<p><tt>stub(M::pid(), Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>, Answer::<a href="#type-answer">answer()</a>) -&gt; ok</tt><br></p>
+</div><p>
+  This is similar <code>stub/4</code> except that it, like
+  <code>strict/5</code> allows the definition of a return value
+  or an answer function.</p>
+<p><b>See also:</b> <a href="#strict-5"><code>strict/5</code></a>, <a href="#stub-4"><code>stub/4</code></a>.</p>
+
+<h3 class="function"><a name="verify-1">verify/1</a></h3>
+<div class="spec">
+<p><tt>verify(M::term()) -&gt; ok</tt><br></p>
+</div><p>
+  Finishes the replay phase. If the code under test did not cause all expected
+  invokations defined by <code>strict/4</code> or <code>strict/5</code>, the
+  call will fail with <code>badmatch</code> with a comprehensive error message.
+  Otherwise the mock process exits normally, returning <code>ok</code>.</p>
+
+<h3 class="function"><a name="zelf-0">zelf/0</a></h3>
+<div class="spec">
+<p><tt>zelf() -&gt; atom()</tt><br></p>
+</div><p>
+  Utility function that can be used as a match function in an
+  argument list to match self(), e.g. when it matches the pid of the
+  process, that calls the funtion during the replay phase.</p>
+<hr>
+
+<div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
+<p><i>Generated by EDoc, Dec 11 2012, 01:14:29.</i></p>
+</body>
+</html>
