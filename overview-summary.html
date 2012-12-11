@@ -2,15 +2,166 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
-<title>The em application</title>
+<title>ErlyMock - An EasyMock inspired mocking library.</title>
 <link rel="stylesheet" type="text/css" href="stylesheet.css" title="EDoc">
 </head>
 <body bgcolor="white">
 <div class="navbar"><a name="#navbar_top"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
-<h1>The em application</h1>
+<h1>ErlyMock - An EasyMock inspired mocking library.</h1>
+<p>Copyright � 2011, 2012 Sven Heyll</p>
+<p><b>Version:</b> 4</p>
+<p><b>Authors:</b> Sven Heyll (<a href="mailto:sven.heyll@gmail.com"><tt>sven.heyll@gmail.com</tt></a>).</p>
+
+
+<p> ErlyMock was built to be helpful for Test Driven Development. I know this
+goal is by no means yet reached, so I ask you kindly to support this
+project. All suggestions, complaints and improvements are welcome. </p>
+
+<p>
+ErlyMock is the latest incarnation of an Erlang mocking library inspired by
+Easymock for Java. It is used in unit tests to verify that a set of functions is
+called by the code under test in correct order and with correct parameters.
+</p>
+<p>
+With ErlyMock it is possible to declare the behavior of arbitrary
+modules/functions with or without expecting acutal invocations. The user simply
+declares what each function call to some function should return or do at the
+beginning of a unit test.
+</p>
+<h2>Some features:</h2>
+<ul>
+<li>API documentation</li>
+<li>battle proven in at least three large projects at http://www.lindenbaum.eu</li>
+<li>comprehensive runtime messages</li>
+<li>two-letter module name(we went from 'mock' to 'em', which was quite an improvement for us)</li>
+<li>small, flexible and easy to use API</li>
+<li>allows strict expectations</li>
+<li>allows stub behavior definitions to be intuitively mixed with strict expectations</li>
+<li>correctly restores cover compiled module</li>
+<li>automatic cleanup when mock or test process dies</li>
+<li>implemented with OTP standard behaviour</li>
+<li>rebar enabled</li></ul>
+
+<h2>Usage example:</h2>
+
+<p>Assume there are two modules, used by the code to be tested, that shall be mocked (at least to prevent damaging side effects):</p>
+
+<p>A rocket launcher server:
+<code>
+-module(rocket_launcher).
+
+launch(Longitude, Latitude, Type) -&gt;
+ ....
+</code>
+And A UI module:
+<code>
+-module(rocket_launcher_ui).
+
+ask_for_instructions() -&gt;
+ ...
+</code>
+Then this is how a happy case unit test might look like:
+<code>
+launche_missle_test() -&gt;
+   % create a new mock process
+   M = em:new(),
+
+   % define the expectations
+   em:strict(M, rocket_launcher_ui, ask_for_instructions, [],
+            {return, [{longitude, 123},
+                      {latitude, 999},
+                      {type, some_rocket_type}]}),
+   em:strict(M, missle_lauchner, launch, [123, 999, some_rocket_type]),
+
+   % tell the mock that all expectations are defined
+   em:replay(M),
+
+   % run code under test
+   rocket_app:interactive(),
+
+   % verify expectations immediately
+   em:verify(M).
+</code></p>
+
+<p>Another example shall show the usefulness of <a href="em.html#await_expectations-1"><code>em:await_expectations/1</code></a>
+instead of <a href="em.html#verify-1"><code>em:verify/1</code></a> to wait for asynchronouse invokations and <a href="em.html#zelf-1"><code>em:zelf/1</code></a> as argument matcher matching the process id of the process calling
+the mocked functions in the replay phase.</p>
+
+<p><code>
+
+%% Let's look at the impl first:
+-module(xxx_impl).
+
+
+
+download_image(Url) -&gt;
+    gen_server:cast(?MODULE, {download, URL}).
+
+%% ...
+
+handle_cast({download, URL}, State) -&gt;
+    net_io:schedule_download(Url, self()),
+    {noreply, State}.
+
+%%%%%%%%%% Now this 'cast' happens asynchronously using 'em:verify/1' would not
+%%%%%%%%%% help a lot, it would be pure luck if the erlang scheduler executed
+%%%%%%%%%% that handle_cast before. This is the case where
+%%%%%%%%%% em:await_expectations/1 comes in handy...
+
+%% Let's look at the test first:
+
+downld_img_test() -&gt;
+   % create a new mock process
+    M = em:new(),
+
+    Url = test_url,
+
+    em:strict(M, net_io, schedule_download,
+              [Url,
+               %% em:zelf() will match 'self()' of the process under test!
+               em:zelf()]),
+
+    em:replay(M),
+
+    %% call code under test
+    xxx_impl:download_image(Url),
+
+    %% await the cast to happen:
+    em:await_expectations(M).
+
+</code></p>
+
+<p><strong>For more details please read the <a href="em.html"><code>em</code></a> module documentation.</strong></p>
+
+
+<h2>History</h2>
+
+<p> ErlyMock has undergone many stages and years of development and usage before
+reaching this stage.</p>
+
+<p> It was first published here:
+http://sheyll.blogspot.com/2009/02/erlang-mock-erlymock.html Then Samual Rivas
+cleaned it up and added support for restoring cover compiled modules for his
+project, see http://www.lambdastream.com/. </p>
+
+<p>The code was then added with all modifications to the great new
+erlang-maven-plugin forge which can be found here:
+http://sourceforge.net/projects/erlang-plugin/.  </p>
+
+<p> Then I decided to partially rewrite ErlyMock in order to provide a simpler
+API and in order to improve the code quality. Also, I wanted to use the gen_fsm
+OTP standard behavior.</p>
+
+<p> Later loxybjorn on github added rebar support, now erlymock could automatically be added to rebar projects.</p>
+
+<p> Several improvements were added by Olle Törnström, who helped fixing module purging issues.</p>
+
+<p> Finally I decided to remove maven support, and to rely totally on rebar.</p>
+
+<strong>Thanks to all who helped with erlymock.</strong>
 
 <hr>
 <div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
-<p><i>Generated by EDoc, Dec 11 2012, 01:20:54.</i></p>
+<p><i>Generated by EDoc, Dec 11 2012, 02:00:31.</i></p>
 </body>
 </html>
