@@ -1,2 +1,5 @@
 .project
 target/
+ebin/
+.eunit/
+doc/
