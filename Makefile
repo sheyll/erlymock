@@ -1,15 +1,16 @@
 REBAR="./rebar"
 SHELL = /bin/sh
 
-.DEFAULT_GOAL := compile
+.DEFAULT_GOAL := edoc
 
-.PHONY = compile clean test doc
+.PHONY = compile clean test edoc
 
-doc:
+edoc:
 	$(REBAR) doc skip_deps=true
 	git checkout gh-pages	
-	mv doc/* .
-	rm -rf doc
+	mv doc/*.html .
+	mv doc/*.css .
+	mv doc/*.png .
 	git add . 
 	git commit -m "Update auto-generated E-Doc"
 	git push origin gh-pages
@@ -24,4 +25,6 @@ test:
 
 clean:
 	$(REBAR) clean
-	rm -rf doc
+	rm -f doc/*.html
+	rm -f doc/*.css
+	rm -f doc/*.png
