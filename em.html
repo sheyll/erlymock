@@ -12,7 +12,7 @@
 <h1>Module em</h1>
 <ul class="index"><li><a href="#description">Description</a></li><li><a href="#types">Data Types</a></li><li><a href="#index">Function Index</a></li><li><a href="#functions">Function Details</a></li></ul>   
 The module name 'em' stands for 'Erly Mock'.
-<p>Copyright © (C) 2011, Sven Heyll</p>
+<p>Copyright © (C) 2011, 2012 Sven Heyll</p>
 
 <p><b>Behaviours:</b> <a href="gen_fsm.html"><tt>gen_fsm</tt></a>.</p>
 <p><b>Authors:</b> Sven Heyll (<a href="mailto:sven.heyll@lindenbaum.eu"><tt>sven.heyll@lindenbaum.eu</tt></a>).</p>
@@ -22,20 +22,20 @@ The module name 'em' stands for 'Erly Mock'.</p>
   
    <p>This mocking library works similar to Easymock.</p>
   
-   <p>After a mock process is started by <code>new/0</code> it can be
+   <p>After a mock process is started by <a href="#new-0"><code>new/0</code></a> it can be
    programmed to expect function calls and to react to them in two
    ways: <ul><li>by returning a value</li><li>by executing an arbitrary
    function</li></ul>
-   This is done with <code>strict/4, strict/5, stub/4, stub/5</code>.
+   This is done with <a href="#strict-4"><code>strict/4</code></a>, <a href="#strict-5"><code>strict/5</code></a>, <a href="#stub-4"><code>stub/4</code></a>, <a href="#stub-5"><code>stub/5</code></a>
    </p>
   
    <p>Before the code under test is executed, the mock must be told
-   that the programming phase is over by <code>replay/1</code>.</p>
+   that the programming phase is over by <a href="#replay-1"><code>replay/1</code></a>.</p>
   
    <p>In the next phase the code under test is run, and might or
    might not call the functions mocked.
    The mock process checks that all functions programmed with
-   <code>strict/4, strict/5</code>are called in the
+   <a href="#strict-4"><code>strict/4</code></a>, <a href="#strict-5"><code>strict/5</code></a> are called in the
    correct order, with the expected arguments and reacts in the way
    defined during the programming phase. If a mocked function is called
    although another function was expected, or if an expected function
@@ -96,7 +96,7 @@ implies, that tests that mock the same modules must be run sequentially.</p>
   Adds an expectation during the programming phase for a specific functiion
   invokation.</td></tr>
 <tr><td valign="top"><a href="#strict-5">strict/5</a></td><td>
-  This function behaves like <code>strict/4</code>
+  This function behaves like <a href="#strict-4"><code>strict/4</code></a>
   and additionally accepts a return value or an answer function.</td></tr>
 <tr><td valign="top"><a href="#stub-4">stub/4</a></td><td>
   Defines a what happens when a function is called whithout recording any
@@ -109,7 +109,7 @@ implies, that tests that mock the same modules must be run sequentially.</p>
   Finishes the replay phase.</td></tr>
 <tr><td valign="top"><a href="#zelf-0">zelf/0</a></td><td>
   Utility function that can be used as a match function in an
-  argument list to match self(), e.g.</td></tr>
+  argument list to match <code>self()</code>, e.g.</td></tr>
 </table>
 
 <h2><a name="functions">Function Details</a></h2>
@@ -188,7 +188,7 @@ implies, that tests that mock the same modules must be run sequentially.</p>
   to 'stub' (see below).</p>
   <p>The parameters are:
   <ul>
-  <li><code>M</code> the mock pid, returned by <code>new/0</code></li>
+  <li><code>M</code> the mock pid, returned by <a href="#new-0"><code>new/0</code></a></li>
   <li><code>Mod</code> the module of the function to mock</li>
   <li><code>Fun</code> the name of the function to mock</li>
   <li><code>Args</code> a list of expected arguments.
@@ -199,17 +199,17 @@ implies, that tests that mock the same modules must be run sequentially.</p>
   <p>
   The return value, that the application will get when calling the mocked
   function is simply the atom <code>ok</code>. This differentiates this
-  function from <code>strict/5</code>, which allows the definition of a
+  function from <a href="#strict-5"><code>strict/5</code></a>, which allows the definition of a
   custom response function or a custom return value.
   </p>
   NOTE: This function may only be called between <code>new/0</code> and
-  <code>replay/1</code> - that is during the programming phase.</p>
+  <a href="#replay-1"><code>replay/1</code></a> - that is during the programming phase.</p>
 
 <h3 class="function"><a name="strict-5">strict/5</a></h3>
 <div class="spec">
 <p><tt>strict(M::pid(), Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>, Answer::<a href="#type-answer">answer()</a>) -&gt; ok</tt><br></p>
 </div><p>
-  This function behaves like <code>strict/4</code>
+  This function behaves like <a href="#strict-4"><code>strict/4</code></a>
   and additionally accepts a return value or an answer function. That parameter
   <code>Answer</code> may be:
   <ul>
@@ -228,7 +228,6 @@ implies, that tests that mock the same modules must be run sequentially.</p>
   returned from the invocation.
   </li>
   </ul></p>
-<p><b>See also:</b> <a href="#strict-4"><code>strict/4</code></a>.</p>
 
 <h3 class="function"><a name="stub-4">stub/4</a></h3>
 <div class="spec">
@@ -253,7 +252,7 @@ implies, that tests that mock the same modules must be run sequentially.</p>
 <p><tt>verify(M::term()) -&gt; ok</tt><br></p>
 </div><p>
   Finishes the replay phase. If the code under test did not cause all expected
-  invokations defined by <code>strict/4</code> or <code>strict/5</code>, the
+  invokations defined by <a href="#strict-4"><code>strict/4</code></a> or <a href="#strict-5"><code>strict/5</code></a>, the
   call will fail with <code>badmatch</code> with a comprehensive error message.
   Otherwise the mock process exits normally, returning <code>ok</code>.</p>
 
@@ -262,11 +261,11 @@ implies, that tests that mock the same modules must be run sequentially.</p>
 <p><tt>zelf() -&gt; atom()</tt><br></p>
 </div><p>
   Utility function that can be used as a match function in an
-  argument list to match self(), e.g. when it matches the pid of the
+  argument list to match <code>self()</code>, e.g. when it matches the pid of the
   process, that calls the funtion during the replay phase.</p>
 <hr>
 
 <div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
-<p><i>Generated by EDoc, Dec 11 2012, 02:03:30.</i></p>
+<p><i>Generated by EDoc, Dec 11 2012, 02:08:43.</i></p>
 </body>
 </html>
