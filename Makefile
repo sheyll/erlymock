@@ -7,8 +7,13 @@ SHELL = /bin/sh
 
 doc:
 	$(REBAR) doc skip_deps=true
-#	mv doc/*.html .
-
+	git checkout gh-pages	
+	mv doc/* .
+	rm -rf doc
+	git add . 
+	git commit -m "Update auto-generated E-Doc"
+	git push origin gh-pages
+	git checkout master
 
 compile:
 	$(REBAR) get-deps
