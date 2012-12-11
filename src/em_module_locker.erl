@@ -37,10 +37,8 @@
 -type state() :: #state{}.
 
 %%------------------------------------------------------------------------------
-%% @doc
 %% The maximum amount of time, that a process may lock modules before being
 %% brutally killed.
-%% @end
 %%------------------------------------------------------------------------------
 -define(MAX_LOCK_TIME, 4400).
 
