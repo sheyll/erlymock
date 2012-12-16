@@ -20,7 +20,7 @@ compile:
 	$(REBAR) get-deps
 	$(REBAR) compile
 
-test:
+eunit: compile clean
 	$(REBAR) skip_deps=true eunit
 
 clean:
