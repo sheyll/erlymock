@@ -479,6 +479,9 @@ replaying({timeout, Ref, invokation_timeout},
                          strict = Expectations}) ->
     {stop,{invokation_timeout, {missing_invokations, Expectations}},State}.
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 -spec replaying(Event :: term(), From :: term(), StateData :: statedata()) ->
                        {reply, Reply :: term(), NextState :: atom(),
                         NewStateData :: statedata()} |
