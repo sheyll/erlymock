@@ -135,7 +135,7 @@ reference and blocks until the expected invokation happens.</p>
 
 <p>A useful property of {@link em:await/2} is that it returns the pid and the
 arguments of the recorded function call. This means that {@link em:await/2} can
-also be used to <i>capture</i> parameters and process ids of, even when the
+also be used to <i>capture</i> parameters and process ids, even when the
 synchronization aspect is irrelevant.</p>
 
 <i>COME CODE:</i>
