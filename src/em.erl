@@ -134,7 +134,7 @@
 
 %%------------------------------------------------------------------------------
 %% @doc
-%% <p>Spawn a linked mock process and returns it's pid. This is usually the
+%% Spawn a linked mock process and return the pid. <p>This is usually the
 %% first thing to do in each unit test. The resulting pid is used in the other
 %% functions below.</p> <p>NOTE: only a single mock proccess is required for a
 %% single unit test case. One mock process can mock an arbitrary number of
@@ -153,7 +153,6 @@ new() ->
 
 %%------------------------------------------------------------------------------
 %% @doc
-%%
 %% Add an expectation during the programming phase for a specific function
 %% invokation.
 %%
@@ -471,7 +470,7 @@ programming(replay,
        mocked_modules = MMs}}.
 
 %%------------------------------------------------------------------------------
-%% @private (goto-char 1)
+%% @private
 %%------------------------------------------------------------------------------
 -spec replaying(Event :: term(), StateData :: statedata()) ->
                        {stop, Reason :: term(), NewStateData :: statedata()}.
