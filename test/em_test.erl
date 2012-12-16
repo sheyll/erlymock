@@ -263,3 +263,22 @@ await_expectations_test() ->
     em:replay(M),
     spawn(fun() -> receive after 200 -> mod:f() end end),
     em:await_expectations(M).
+
+await_test() ->
+    M = em:new(),
+    F1 = em:strict(M, mod, f1, [arg1, arg2], {return, ret}),
+    F2 = em:strict(M, mod, f2, []),
+    em:strict(M, mod, f3, []),
+    em:replay(M),
+    mod:f1(arg1, arg2),
+    OtherPid = spawn(fun() -> receive after 200 -> mod:f2() end end),
+    %% ... and block until it happens
+    ?assertEqual({success, OtherPid, []},
+                 em:await(M, F2)),
+    %% in the invokation has already happened em:await shall return
+    %% immediately with the historic invokation details...
+    ?assertEqual({success, self(), [arg1, arg2]},
+                 em:await(M, F1)),
+    mod:f3(),
+    ?assertEqual({error, invalid_handle}, em:await(M, xxx)),
+    em:verify(M).

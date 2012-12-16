@@ -79,6 +79,7 @@
          stub/4,
          stub/5,
          replay/1,
+         await/2,
          await_expectations/1,
          verify/1,
          any/0,
@@ -168,18 +169,20 @@ new() ->
 %% of the parameter at that position, or a predicate function which will be
 %% applied to the actual argument.</li>
 %% </ul></p>
+%% <p>This function returns a term that identifies this expectations so that the
+%% code under test can call {@link await/2} to block until this expectation is
+%% fullfilled.</p>
 %% <p>
 %% The return value, that the application will get when calling the mocked
-%% function is simply the atom <code>ok</code>. This differentiates this
-%% function from {@link strict/5}, which allows the definition of a
-%% custom response function or a custom return value.
-%% </p>
-%% NOTE: This function may only be called between <code>new/0</code> and
-%% {@link replay/1} - that is during the programming phase.
+%% function in the replay phase is simply the atom <code>ok</code>. This
+%% differentiates this function from {@link strict/5}, which allows the
+%% definition of a custom response function or a custom return value.  </p>
+%% NOTE: This function may only be called between <code>new/0</code> and {@link
+%% replay/1} - that is during the programming phase.
 %% @end
 %%------------------------------------------------------------------------------
 -spec strict(pid(), atom(), atom(), args()) ->
-                    ok.
+                    reference().
 strict(M, Mod, Fun, Args)
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
     strict(M, Mod, Fun, Args, {return, ok}).
@@ -208,13 +211,13 @@ strict(M, Mod, Fun, Args)
 %% @end
 %%------------------------------------------------------------------------------
 -spec strict(pid(), atom(), atom(), args(), answer()) ->
-                    ok.
+                    reference().
 strict(M, Mod, Fun, Args, Answer = {return, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
-    ok = gen_fsm:sync_send_event(M, {strict, Mod, Fun, Args, Answer});
+    gen_fsm:sync_send_event(M, {strict, Mod, Fun, Args, Answer});
 strict(M, Mod, Fun, Args, Answer = {function, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
-    ok = gen_fsm:sync_send_event(M, {strict, Mod, Fun, Args, Answer}).
+    gen_fsm:sync_send_event(M, {strict, Mod, Fun, Args, Answer}).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -289,6 +292,25 @@ replay(M) ->
 
 %%------------------------------------------------------------------------------
 %% @doc
+%% Block until a specific invokation defined via {@link strict/4,5} during the
+%% programming phase was made. The handle for the specific invokation is the
+%% value returned by {@link strict/4,5}. The return value contains the actual
+%% parameters of the invokation and the pid of the process that does the
+%% invokation is also returned. In case the invokation has already happed, the
+%% function returns immediately. If the handle is not valid, an error is
+%% returned.
+%% @end
+%% ------------------------------------------------------------------------------
+-spec await(M :: term(), Handle :: reference()) ->
+                   {success,
+                    InvPid :: pid(),
+                    Args :: [term()]} |
+                   {error, invalid_handle}.
+await(M, Handle) ->
+    gen_fsm:sync_send_all_state_event(M, {await, Handle}, 5000).
+
+%%------------------------------------------------------------------------------
+%% @doc
 %% Wait until all invokations defined during the programming phase were made.
 %% After this functions returns, the mock can be expected to exit and clean up
 %% all modules installed.
@@ -341,19 +363,25 @@ zelf() ->
 %%
 
 -record(expectation,
-        {m :: atom(),
+        {id :: reference(),
+         m :: atom(),
          f :: atom(),
          a :: args(),
-         answer :: answer()}).
+         answer :: answer(),
+         listeners :: [GenFsmFrom :: term()]}).
 
 -record(state, {
           test_proc :: pid(),
           inv_to_ref :: reference(),
           strict :: [#expectation{}],
+          strict_log :: [{strict_log,
+                          ERef :: reference(),
+                          IPid :: pid(),
+                          Args :: [term()]}],
           stub  :: [#expectation{}],
 	  blacklist :: [atom()],
           mocked_modules :: [{atom(), {just, term()}|nothing}],
-          await_invokations_reply = nothing :: nothing | {just, term()}
+          await_invokations_reply :: nothing | {just, term()}
          }).
 
 -type statedata() :: #state{}.
@@ -373,11 +401,13 @@ init([TestProc]) ->
     {ok,
      programming,
      #state{
-       test_proc = TestProc,
-       strict = [],
-       stub = [],
-       blacklist = [],
-       mocked_modules = []}}.
+        test_proc = TestProc,
+        strict = [],
+        strict_log = [],
+        stub = [],
+        blacklist = [],
+        mocked_modules = [],
+        await_invokations_reply = nothing}}.
 
 
 %%------------------------------------------------------------------------------
@@ -389,11 +419,18 @@ init([TestProc]) ->
 programming({strict, Mod, Fun, Args, Answer},
             _From,
             State = #state{strict = Strict}) ->
+    InvRef = make_ref(),
     {reply,
-     ok,
+     InvRef,
      programming,
      State#state{
-       strict = [#expectation{m = Mod, f = Fun, a = Args, answer = Answer}|Strict]}};
+       strict = [#expectation{id = InvRef,
+                              m = Mod,
+                              f = Fun,
+                              a = Args,
+                              answer = Answer,
+                              listeners = []}
+                 |Strict]}};
 
 programming({stub, Mod, Fun, Args, Answer},
             _From,
@@ -450,16 +487,20 @@ replaying(I = {invokation, Mod, Fun, Args, IPid},
             await_invokations_reply = AwInvRepl,
             inv_to_ref = InvTORef,
             strict = [#expectation{
-                        m      = Mod,
-                        f      = Fun,
-                        a      = EArgs,
-                        answer = Answer}
+                         id     = ERef,
+                         m      = Mod,
+                         f      = Fun,
+                         a      = EArgs,
+                         answer = Answer,
+                         listeners = Listeners}
                       |Rest]})
   when length(EArgs) == length(Args) ->
     gen_fsm:cancel_timer(InvTORef),
     case check_args(Args, EArgs, IPid) of
         true ->
             gen_fsm:reply(From, Answer),
+            [gen_fsm:reply(Listener, {success, IPid, Args})
+             || Listener <- Listeners],
             NextState = case Rest of
                             [] -> no_expectations;
                             _ ->
@@ -470,7 +511,10 @@ replaying(I = {invokation, Mod, Fun, Args, IPid},
                                                     invokation_timeout),
                     {next_state, NextState,
                      State#state{inv_to_ref = NextTimer,
-                                 strict=Rest}};
+                                 strict=Rest,
+                                 strict_log =
+                                     [{strict_log, ERef, IPid, Args}
+                                      | State#state.strict_log]}};
                true ->
                     {just, AIR} = AwInvRepl,
                     gen_fsm:reply(AIR, ok),
@@ -561,6 +605,8 @@ code_change(_OldVsn, StateName, State, _Extra) ->
                                {stop, normal, ok, NewStateData :: statedata()}
                                    | {next_state, StateName :: atom(),
                                       NewStateData :: statedata()}.
+handle_sync_event({await, H}, From, StateName, State) ->
+    {next_state, StateName, add_invokation_listener(From, H, State)};
 handle_sync_event(await_expectations, _From, no_expectations, State) ->
     {stop, normal, ok, State};
 handle_sync_event(await_expectations, From, StateName,
@@ -776,4 +822,27 @@ get_cover_compiled_binary(Mod) ->
             end;
         _ ->
             nothing
+    end.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+add_invokation_listener(From, Ref, State = #state{strict=Strict,
+                                                  strict_log = StrictSucc}) ->
+    %% if the invokation does not exist, check the strict_history
+    case lists:keyfind(Ref, 2, Strict) of
+        false ->
+            case lists:keyfind(Ref, 2, StrictSucc) of
+                false ->
+                    gen_fsm:reply(From, {error, invalid_handle});
+
+                {strict_log, _ERef, IPid, Args} ->
+                    gen_fsm:reply(From, {success, IPid, Args})
+            end,
+            State;
+
+        E = #expectation{listeners = Ls} ->
+            NewE = E#expectation{listeners = [From|Ls]},
+            NewStrict = lists:keyreplace(Ref, 2, Strict, NewE),
+            State#state{strict = NewStrict}
     end.

@@ -123,6 +123,61 @@ downld_img_test() ->
 
 </pre>
 
+<h2> More Support for asynchronous calls </h2>
+
+See {@link em:await/2} for details.
+
+<p>When gen_server:cast's and gen_event:handle_event calls decorate the module
+under test one is often in the need to wait for an operation to happen before
+triggering the next operation.</p>
+
+<p>One example is when the code under test casts a message, and receive's event
+caused by the cast later. In this situation it is desirable to not call the
+server shutdown code until the event was received and the corresponding
+expections are met.</p>
+
+This is where the fact that {@link em:strict/4} returns a handle for the
+expectation comes in handy, because {@link em:await/2} can be used to block the
+test process until that specific invokation was by the code under test.
+
+<i>... ok I give up explaining... COME CODE:</i>
+
+<strong>xxx Impl</strong>
+<pre>
+-module(xxx).
+...
+op(Pid) ->
+  gen_server:cast(Pid, op).
+...
+handle_cast(op, State) ->
+    collab1:do_a(),
+    collab2:do_b(),
+    {noreply, State}.
+</pre>
+
+<strong>xxx Test</strong>
+<pre>
+
+op_twice_test() ->
+  M = em:new(),
+
+  em:strict(M, collab1, do_a, []),
+
+  DoneB =
+    em:strict(M, collab2, do_b, []),
+
+  em:replay(M),
+
+  {ok, Pid} = xxx:start(),
+
+  op(Pid),
+  em:await(M, DoneB),
+
+  exit(Pid, kill),
+  em:verify(M).
+
+</pre>
+
 <strong>For more details please read the {@link em} module documentation.</strong>
 
 
