@@ -173,7 +173,7 @@ new() ->
 %% </ul></p>
 %%
 %% <p>This function returns a reference that identifies the expectation. This
-%% reference can be passed to {@link await/2} which blocks until the expectated
+%% reference can be passed to {@link await/2} which blocks until the expected
 %% invokation happens.</p>
 %%
 %% <p> The return value, that the application will get when calling the mocked
