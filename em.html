@@ -78,16 +78,13 @@ implies, that tests that mock the same modules must be run sequentially.</p>
 <table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#any-0">any/0</a></td><td>
   Utility function that can be used as a match function in an argument list
   to match any value.</td></tr>
-<tr><td valign="top"><a href="#await-2">await/2</a></td><td>
-  Block until a specific invokation defined via <a href="#strict-4"><code>strict/4</code></a> during the
-  programming phase was made.</td></tr>
+<tr><td valign="top"><a href="#await-2">await/2</a></td><td>.</td></tr>
 <tr><td valign="top"><a href="#await_expectations-1">await_expectations/1</a></td><td>
   Wait until all invokations defined during the programming phase were made.</td></tr>
 <tr><td valign="top"><a href="#lock-2">lock/2</a></td><td>
   The function will block until all modules in the list are not
   mocked by another erlymock process.</td></tr>
-<tr><td valign="top"><a href="#new-0">new/0</a></td><td>
-  Spawns a linked mock process and returns it's pid.</td></tr>
+<tr><td valign="top"><a href="#new-0">new/0</a></td><td>.</td></tr>
 <tr><td valign="top"><a href="#nothing-2">nothing/2</a></td><td>
   This is used to express the expectation that no function of a certain module
   is called.</td></tr>
@@ -96,7 +93,7 @@ implies, that tests that mock the same modules must be run sequentially.</p>
   actual code under test may run and invoke the functions mocked.</td></tr>
 <tr><td valign="top"><a href="#replaying-3">replaying/3</a></td><td></td></tr>
 <tr><td valign="top"><a href="#strict-4">strict/4</a></td><td>
-  Adds an expectation during the programming phase for a specific functiion
+  Add an expectation during the programming phase for a specific function
   invokation.</td></tr>
 <tr><td valign="top"><a href="#strict-5">strict/5</a></td><td>
   This function behaves like <a href="#strict-4"><code>strict/4</code></a>
@@ -128,13 +125,12 @@ implies, that tests that mock the same modules must be run sequentially.</p>
 <div class="spec">
 <p><tt>await(M::term(), Handle::reference()) -&gt; {success, InvPid::pid(), Args::[term()]} | {error, invalid_handle}</tt><br></p>
 </div><p>
-  Block until a specific invokation defined via <a href="#strict-4"><code>strict/4</code></a> during the
-  programming phase was made. The handle for the specific invokation is the
-  value returned by <a href="#strict-4"><code>strict/4</code></a>. The return value contains the actual
-  parameters of the invokation and the pid of the process that does the
-  invokation is also returned. In case the invokation has already happed, the
-  function returns immediately. If the handle is not valid, an error is
-  returned.</p>
+  <p>Block until a specific invokation defined via <a href="#strict-4"><code>strict/4</code></a> during the
+  programming phase was made</p>. <p>The handle for the specific invokation is
+  the value returned by <a href="#strict-4"><code>strict/4</code></a>.</p> <p>The return value contains the
+  parameters and the pid of the recorded invokation. This function maybe called
+  anytime before or after the referenced invokation has actually
+  happened.</p><p>If the handle is not valid, an error is returned.</p></p>
 
 <h3 class="function"><a name="await_expectations-1">await_expectations/1</a></h3>
 <div class="spec">
@@ -155,16 +151,15 @@ implies, that tests that mock the same modules must be run sequentially.</p>
 <div class="spec">
 <p><tt>new() -&gt; pid()</tt><br></p>
 </div><p>
-  Spawns a linked mock process and returns it's pid. This is usually the first
-  thing to do in each unit test. The resulting pid is used in the other
-  functions below. NOTE: only a single mock proccess is required for a single
-  unit test case. One mock process can mock an arbitrary number of different
-  modules.
-  When the mock process dies, all uploaded modules are purged from the code
-  server, and all cover compiled modules are restored.
-  When the process that started the mock exits, the mock automatically cleans
-  up and exits.
-  After new() the mock is in 'programming' state.</p>
+  <p>Spawn a linked mock process and returns it's pid. This is usually the
+  first thing to do in each unit test. The resulting pid is used in the other
+  functions below.</p> <p>NOTE: only a single mock proccess is required for a
+  single unit test case. One mock process can mock an arbitrary number of
+  different modules.</p> <p>When the mock process dies, all uploaded modules
+  are purged from the code server, and all cover compiled modules are
+  restored.</p> <p>When the process that started the mock exits, the mock
+  automatically cleans up and exits.</p> <p>After new() the mock is in
+  'programming' state.</p></p>
 
 <h3 class="function"><a name="nothing-2">nothing/2</a></h3>
 <div class="spec">
@@ -196,7 +191,7 @@ implies, that tests that mock the same modules must be run sequentially.</p>
 <div class="spec">
 <p><tt>strict(M::pid(), Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>) -&gt; reference()</tt><br></p>
 </div><p>
-  Adds an expectation during the programming phase for a specific functiion
+  Add an expectation during the programming phase for a specific function
   invokation.
   <p>All expectations defined by 'strict' define an order in which the
   application must call the mocked functions, hence the name 'strict' as oposed
@@ -282,6 +277,6 @@ implies, that tests that mock the same modules must be run sequentially.</p>
 <hr>
 
 <div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
-<p><i>Generated by EDoc, Dec 16 2012, 19:33:51.</i></p>
+<p><i>Generated by EDoc, Dec 16 2012, 19:52:32.</i></p>
 </body>
 </html>
