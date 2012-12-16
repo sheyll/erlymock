@@ -291,9 +291,9 @@ replay(M) ->
 
 %%------------------------------------------------------------------------------
 %% @doc
-%% <p>Block until a specific invokation defined via {@link strict/4} during the
-%% programming phase was made</p>. <p>The handle for the specific invokation is
-%% the value returned by {@link strict/4}.</p> <p>The return value contains the
+%% Block until a specific invokation defined via {@link strict/4} during the
+%% programming phase was made. <p>The handle for the specific invokation is the
+%% value returned by {@link strict/4}.</p> <p>The return value contains the
 %% parameters and the pid of the recorded invokation. This function maybe called
 %% anytime before or after the referenced invokation has actually
 %% happened.</p><p>If the handle is not valid, an error is returned.</p>
