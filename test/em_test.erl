@@ -39,10 +39,15 @@ invokation_timout_test() ->
     receive
         {'EXIT',
          Pid,
-         {invokation_timeout,
-          {missing_invokations,
-           [{expectation,some_mod,some_fun,[a],{return,ok}}]}}} ->
-            ok
+         Reason} ->
+            ?assertMatch({invokation_timeout,
+                          {missing_invokations,
+                           [{expectation,
+                             _Ref,
+                             some_mod,some_fun,[a],
+                             {return,ok},
+                             _Listeners}]}},
+                         Reason)
     end.
 
 invalid_parameter_1_test() ->
@@ -71,8 +76,9 @@ invalid_order_test() ->
                   {{case_clause,
                     {unexpected_invokation,
                      {actual,{invokation,some_mod,some_fun,[a], _}},
-                     {expected,{expectation,some_mod,some_fun,[a,b],
-                                {return,ok}}}}}, _}},
+                     {expected,{expectation,_Ref, some_mod,some_fun,[a,b],
+                                {return,ok},
+                                _Listeners}}}}, _}},
                  catch some_mod:some_fun(a)).
 
 too_many_invokations_test() ->
@@ -93,7 +99,7 @@ invokations_missing_test() ->
     process_flag(trap_exit, true),
     ?assertError({badmatch,
                   {invokations_missing,
-                   [{expectation,some_mod,some_fun,[a,b],{return,ok}}]}},
+                   [{expectation,_, some_mod,some_fun,[a,b],{return,ok}, _}]}},
                  em:verify(M)).
 
 invalid_parameter_2_test() ->
