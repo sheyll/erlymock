@@ -153,11 +153,14 @@ new() ->
 
 %%------------------------------------------------------------------------------
 %% @doc
+%%
 %% Add an expectation during the programming phase for a specific function
 %% invokation.
+%%
 %% <p>All expectations defined by 'strict' define an order in which the
 %% application must call the mocked functions, hence the name 'strict' as oposed
 %% to 'stub' (see below).</p>
+%%
 %% <p>The parameters are:
 %% <ul>
 %% <li><code>M</code> the mock pid, returned by {@link new/0}</li>
@@ -168,16 +171,19 @@ new() ->
 %% of the parameter at that position, or a predicate function which will be
 %% applied to the actual argument.</li>
 %% </ul></p>
-%% <p>This function returns a term that identifies this expectations so that the
-%% code under test can call {@link await/2} to block until this expectation is
-%% fullfilled.</p>
-%% <p>
-%% The return value, that the application will get when calling the mocked
+%%
+%% <p>This function returns a reference that identifies the expectation. This
+%% reference can be passed to {@link await/2} which blocks until the expectated
+%% invokation happens.</p>
+%%
+%% <p> The return value, that the application will get when calling the mocked
 %% function in the replay phase is simply the atom <code>ok</code>. This
 %% differentiates this function from {@link strict/5}, which allows the
 %% definition of a custom response function or a custom return value.  </p>
+%%
 %% NOTE: This function may only be called between <code>new/0</code> and {@link
 %% replay/1} - that is during the programming phase.
+%%
 %% @end
 %%------------------------------------------------------------------------------
 -spec strict(pid(), atom(), atom(), args()) ->
