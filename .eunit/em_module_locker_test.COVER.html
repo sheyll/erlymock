@@ -1,0 +1,111 @@
+<html>
+<head><title>.eunit/em_module_locker_test.COVER.html</title></head><body bgcolor=white text=black>
+<pre>
+File generated from /home/sven/dev/erlymock/.eunit/em_module_locker_test.erl by COVER 2012-12-16 at 19:29:47
+
+****************************************************************************
+
+        |  %%%=============================================================================
+        |  %%%                                        
+        |  %%%               |  ° __   _|  _  __  |_   _       _ _   (TM)
+        |  %%%               |_ | | | (_| (/_ | | |_) (_| |_| | | | 
+        |  %%%
+        |  %%% @author Sven Heyll &lt;sven.heyll@lindenbaum.eu&gt;
+        |  %%% @author Tobias Schlager &lt;tobias.schlager@lindenbaum.eu&gt;
+        |  %%% @author Timo Koepke &lt;timo.koepke@lindenbaum.eu&gt;
+        |  %%% @author Olle Toernstroem  &lt;olle.toernstroem@lindenbaum.eu&gt;
+        |  %%% @copyright (C) 2011, Lindenbaum GmbH
+        |  %%%
+        |  %%%-----------------------------------------------------------------------------
+        |  
+        |  -module(em_module_locker_test).
+        |  
+        |  -include_lib("eunit/include/eunit.hrl").
+        |  
+        |  -define(SLEEP(TIMEOUT), receive after TIMEOUT -&gt; ok end).
+        |  
+        |  %%%=============================================================================
+        |  %%% TESTS
+        |  %%%=============================================================================
+        |  remove_lock_after_some_time_test() -&gt;
+     1..|      process_flag(trap_exit, true),
+     1..|      case whereis(em_module_locker) of
+        |          undefined -&gt; 
+     1..|              ok;
+        |          MLP -&gt;
+<font color=red>     0..|              link(MLP),</font>
+<font color=red>     0..|              exit(MLP, shutdown),</font>
+<font color=red>     0..|              receive </font>
+        |                  {'EXIT', MLP, _} -&gt;
+<font color=red>     0..|                      ok</font>
+        |              end
+        |      end,
+     1..|      TestPid = spawn(fun() -&gt; receive A -&gt; A end end),
+     1..|      em_module_locker:lock(TestPid, [m2]),
+     1..|      receive after 4400 -&gt; ok end,
+     1..|      TestPid2 = spawn(fun() -&gt; receive A -&gt; A end end),
+     1..|      em_module_locker:lock(TestPid2, [m2]),
+     1..|      TestPid2 ! die.
+        |      
+        |  
+        |  
+        |  simple_lock_and_unlock_test() -&gt;
+     1..|      process_flag(trap_exit, true),
+     1..|      case whereis(em_module_locker) of
+        |          undefined -&gt; 
+<font color=red>     0..|              ok;</font>
+        |          MLP -&gt;
+     1..|              link(MLP),
+     1..|              exit(MLP, shutdown),
+     1..|              receive 
+        |                  {'EXIT', MLP, _} -&gt;
+     1..|                      ok
+        |              end
+        |      end,
+     1..|      Test = self(),
+     1..|      MockPid1 = spawn_link(fun() -&gt;                
+     1..|                                    receive A -&gt; A end 
+        |                            end),
+     1..|      em_module_locker:lock(MockPid1, [m1,m2]),
+     1..|      MockTemp = spawn_link(fun() -&gt; 
+     1..|                                    em_module_locker:lock(self(), [m2]),
+<font color=red>     0..|                                    Test ! mock_temp_locked</font>
+        |                            end),
+     1..|      _MockPid2 = spawn_link(fun() -&gt;
+     1..|                                    em_module_locker:lock(self(), [m2]),
+     1..|                                    Test ! m2_locked,
+     1..|                                    receive A -&gt; A end
+        |                            end),
+     1..|      receive 
+        |          m2_locked -&gt; 
+<font color=red>     0..|              throw(fail1)</font>
+        |      after 10 -&gt;
+     1..|              ok
+        |      end,
+     1..|      exit(MockTemp, kill),
+     1..|      receive
+        |          {'EXIT', MockTemp, _} -&gt;
+     1..|              ok
+        |      end,
+     1..|      MockPid1 ! shutdown,
+     1..|      receive 
+        |          m2_locked -&gt; 
+     1..|              ok
+        |      after 10 -&gt;
+<font color=red>     0..|              throw(fail2)</font>
+        |      end,
+     1..|      receive 
+        |          mock_temp_locked -&gt;
+<font color=red>     0..|              throw(fail3)</font>
+        |      after 10 -&gt;
+     1..|          ok
+        |      end.
+        |      
+        |  
+        |  
+        |  %%%=============================================================================
+        |  %%% Internal Functions
+        |  %%%=============================================================================
+</pre>
+</body>
+</html>
