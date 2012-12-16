@@ -134,16 +134,15 @@
 
 %%------------------------------------------------------------------------------
 %% @doc
-%% Spawns a linked mock process and returns it's pid. This is usually the first
-%% thing to do in each unit test. The resulting pid is used in the other
-%% functions below. NOTE: only a single mock proccess is required for a single
-%% unit test case. One mock process can mock an arbitrary number of different
-%% modules.
-%% When the mock process dies, all uploaded modules are purged from the code
-%% server, and all cover compiled modules are restored.
-%% When the process that started the mock exits, the mock automatically cleans
-%% up and exits.
-%% After new() the mock is in 'programming' state.
+%% <p>Spawn a linked mock process and returns it's pid. This is usually the
+%% first thing to do in each unit test. The resulting pid is used in the other
+%% functions below.</p> <p>NOTE: only a single mock proccess is required for a
+%% single unit test case. One mock process can mock an arbitrary number of
+%% different modules.</p> <p>When the mock process dies, all uploaded modules
+%% are purged from the code server, and all cover compiled modules are
+%% restored.</p> <p>When the process that started the mock exits, the mock
+%% automatically cleans up and exits.</p> <p>After new() the mock is in
+%% 'programming' state.</p>
 %% @end
 %%------------------------------------------------------------------------------
 -spec new() ->
@@ -154,7 +153,7 @@ new() ->
 
 %%------------------------------------------------------------------------------
 %% @doc
-%% Adds an expectation during the programming phase for a specific functiion
+%% Add an expectation during the programming phase for a specific function
 %% invokation.
 %% <p>All expectations defined by 'strict' define an order in which the
 %% application must call the mocked functions, hence the name 'strict' as oposed
@@ -292,13 +291,12 @@ replay(M) ->
 
 %%------------------------------------------------------------------------------
 %% @doc
-%% Block until a specific invokation defined via {@link strict/4} during the
-%% programming phase was made. The handle for the specific invokation is the
-%% value returned by {@link strict/4}. The return value contains the actual
-%% parameters of the invokation and the pid of the process that does the
-%% invokation is also returned. In case the invokation has already happed, the
-%% function returns immediately. If the handle is not valid, an error is
-%% returned.
+%% <p>Block until a specific invokation defined via {@link strict/4} during the
+%% programming phase was made</p>. <p>The handle for the specific invokation is
+%% the value returned by {@link strict/4}.</p> <p>The return value contains the
+%% parameters and the pid of the recorded invokation. This function maybe called
+%% anytime before or after the referenced invokation has actually
+%% happened.</p><p>If the handle is not valid, an error is returned.</p>
 %% @end
 %% ------------------------------------------------------------------------------
 -spec await(M :: term(), Handle :: reference()) ->

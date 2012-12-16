@@ -125,24 +125,22 @@ downld_img_test() ->
 
 <h2> More Support for asynchronous calls </h2>
 
-See {@link em:await/2} for details.
+<p>Erlymock provides support for blocking the test process until a specific
+expection defined by {@link strict/4} or {@link strict/5} was recorded by the
+mock process.</p>
 
-<p>When gen_server:cast's and gen_event:handle_event calls decorate the module
-under test one is often in the need to wait for an operation to happen before
-triggering the next operation.</p>
+<p>Both {@link strict/4} and {@link strict/5} return a reference to the
+expectation they define. The function {@link em:await/2} accepts such a
+reference and blocks until the expected invokation happens.</p>
 
-<p>One example is when the code under test casts a message, and receive's event
-caused by the cast later. In this situation it is desirable to not call the
-server shutdown code until the event was received and the corresponding
-expections are met.</p>
+<p>A useful property of {@link em:await/2} is that it returns the pid and the
+arguments of the recorded function call. This means that {@link em:await/2} can
+also be used to <i>capture</i> parameters and process ids of, even when the
+synchronization aspect is irrelevant.</p>
 
-This is where the fact that {@link em:strict/4} returns a handle for the
-expectation comes in handy, because {@link em:await/2} can be used to block the
-test process until that specific invokation was by the code under test.
+<i>COME CODE:</i>
 
-<i>... ok I give up explaining... COME CODE:</i>
-
-<strong>xxx Impl</strong>
+<strong>Impl</strong>
 <pre>
 -module(xxx).
 ...
@@ -150,28 +148,26 @@ op(Pid) ->
   gen_server:cast(Pid, op).
 ...
 handle_cast(op, State) ->
-    collab1:do_a(),
-    collab2:do_b(),
+    collab:do_it(),
     {noreply, State}.
 </pre>
 
-<strong>xxx Test</strong>
+<strong> Test</strong>
 <pre>
 
 op_twice_test() ->
   M = em:new(),
 
-  em:strict(M, collab1, do_a, []),
-
-  DoneB =
-    em:strict(M, collab2, do_b, []),
+  DoneIt =
+    em:strict(M, collab, do_it, []),
 
   em:replay(M),
 
   {ok, Pid} = xxx:start(),
 
-  op(Pid),
-  em:await(M, DoneB),
+  xxx:op(Pid),
+
+  em:await(M, DoneIt),
 
   exit(Pid, kill),
   em:verify(M).
