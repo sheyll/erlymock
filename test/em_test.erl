@@ -163,65 +163,6 @@ nothing_test() ->
     ?assertMatch({'EXIT', {undef, _}}, catch mnesia:blub(some_arg)),
     ?assertMatch(ok, em:verify(M)).
 
-auto_lock_test() ->
-    process_flag(trap_exit, true),
-    Target = self(),
-    spawn(fun() ->
-                  M1 = em:new(),
-                  em:strict(M1, mod1, test, [x]),
-                  em:replay(M1),
-                  receive after 1 -> ok end,
-                  mod1:test(x),
-                  em:verify(M1),
-                  Target ! m1
-          end),
-    spawn(fun() ->
-                  M2 = em:new(),
-                  em:strict(M2, mod1, test, [y,z]),
-                  em:replay(M2),
-                  receive after 1 -> ok end,
-                  mod1:test(y,z),
-                  em:verify(M2),
-                  Target ! m2
-          end),
-    receive
-        m1 ->
-            receive
-                m2 ->
-                    ok
-            end
-    end.
-
-explicit_lock_test() ->
-    process_flag(trap_exit, true),
-    Target = self(),
-    spawn(fun() ->
-                  M1 = em:new(),
-                  em:strict(M1, mmod1, test, [x]),
-                  em:replay(M1),
-                  receive after 1 -> ok end,
-                  mmod1:test(x),
-                  em:verify(M1),
-                  Target ! mm1
-          end),
-    spawn(fun() ->
-                  M2 = em:new(),
-                  em:lock(M2, [mmod1, mmod3]),
-                  em:strict(M2, mmod2, test, [y,z]),
-                  em:replay(M2),
-                  receive after 1 -> ok end,
-                  mmod2:test(y,z),
-                  em:verify(M2),
-                  Target ! mm2
-          end),
-    receive
-        mm1 ->
-            receive
-                mm2 ->
-                    ok
-            end
-    end.
-
 em_zelf_test() ->
     M = em:new(),
     em:strict(M, mod, f, [em:zelf()]),
@@ -266,3 +207,22 @@ await_test() ->
     mod:f3(),
     ?assertEqual({error, invalid_handle}, em:await(M, xxx)),
     em:verify(M).
+
+error_module_already_locked_test() ->
+    process_flag(trap_exit, true),
+    M1 = em:new(),
+    em:strict(M1, xxx,y,[]),
+    em:replay(M1),
+
+    M2 = em:new(),
+    em:strict(M2, xxx, y, []),
+    try em:replay(M2) of
+        _NoError ->
+            throw(expected_module_already_locked_error)
+    catch
+        exit:{{bad_return_value,
+               {em_error_module_already_mocked, xxx}}, _} ->
+            pass;
+        C:E ->
+            throw({expected_module_already_locked_error_but_got, C, E})
+    end.

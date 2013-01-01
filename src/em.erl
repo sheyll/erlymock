@@ -84,8 +84,7 @@
          verify/1,
          any/0,
          zelf/0,
-	 nothing/2,
-         lock/2]).
+	 nothing/2]).
 
 %% gen_fsm callbacks ---
 -export([programming/3,
@@ -264,17 +263,6 @@ nothing(M, Mod) when is_pid(M), is_atom(Mod) ->
 
 %%------------------------------------------------------------------------------
 %% @doc
-%% The function will block until all modules in the list are not
-%% mocked by another erlymock process.
-%% @end
-%%------------------------------------------------------------------------------
--spec lock(pid(), [atom()]) ->
-		     ok.
-lock(M, Mods) when is_pid(M), is_list(Mods) ->
-   ok = em_module_locker:lock(M, Mods).
-
-%%------------------------------------------------------------------------------
-%% @doc
 %% Finishes the programming phase and switches to the replay phase where the
 %% actual code under test may run and invoke the functions mocked. This may
 %% be called only once, and only in the programming phase. This also loads
@@ -382,6 +370,8 @@ zelf() ->
          }).
 
 -type statedata() :: #state{}.
+
+-define(ERLYMOCK_COMPILED, erlymock_compiled).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% gen_fsm callbacks
@@ -650,7 +640,7 @@ install_mock_modules(#state{strict = ExpectationsStrict,
 			    blacklist = BlackList}) ->
     Expectations = ExpectationsStub ++ ExpectationsStrict,
     ModulesToMock = lists:usort([M || #expectation{m = M} <- Expectations] ++ BlackList),
-    em_module_locker:lock(erlang:self(), ModulesToMock),
+    assert_not_mocked(ModulesToMock),
     [install_mock_module(M, Expectations) || M <- ModulesToMock].
 
 %%------------------------------------------------------------------------------
@@ -660,6 +650,8 @@ install_mock_module(Mod, Expectations) ->
     MaybeBin = get_cover_compiled_binary(Mod),
     ModHeaderSyn = [erl_syntax:attribute(erl_syntax:atom(module),
 					 [erl_syntax:atom(Mod)]),
+                    erl_syntax:attribute(erl_syntax:atom(?ERLYMOCK_COMPILED),
+					 [erl_syntax:atom(true)]),
                     erl_syntax:attribute(erl_syntax:atom(compile),
                                          [erl_syntax:list(
                                             [erl_syntax:atom(export_all)])])],
@@ -817,4 +809,28 @@ add_invokation_listener(From, Ref, State = #state{strict=Strict,
             NewE = E#expectation{listeners = [From|Ls]},
             NewStrict = lists:keyreplace(Ref, 2, Strict, NewE),
             State#state{strict = NewStrict}
+    end.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+assert_not_mocked(Mods) ->
+    [case assert_not_mocked_(M) of
+         ok -> ok;
+         {error, {already_mocked, Mod}} ->
+             throw({em_error_module_already_mocked, Mod})
+     end || M <- Mods],
+    ok.
+assert_not_mocked_(Mod) ->
+    try Mod:module_info(attributes) of
+        Attrs ->
+            case lists:keyfind(?ERLYMOCK_COMPILED, 1 , Attrs) of
+                false ->
+                    ok;
+                _ ->
+                    {error, {already_mocked, Mod}}
+            end
+    catch
+        _:_ ->
+            ok
     end.
