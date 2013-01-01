@@ -225,4 +225,14 @@ error_module_already_locked_test() ->
             pass;
         C:E ->
             throw({expected_module_already_locked_error_but_got, C, E})
-    end.
+    end,
+    xxx:y(),
+    em:verify(M1).
+
+
+verify_missing_invokation_test() ->
+    process_flag(trap_exit, true),
+    M = em:new(),
+    em:strict(M, xxx,y,[]),
+    em:replay(M),
+    em:verify(M).
