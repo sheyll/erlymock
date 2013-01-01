@@ -89,7 +89,6 @@
 
 %% gen_fsm callbacks ---
 -export([programming/3,
-         replaying/2,
          replaying/3,
          no_expectations/3,
          terminate/3,
@@ -101,10 +100,6 @@
 
 %% !!!NEVER CALL THIS FUNCTION!!! ---
 -export([invoke/4]).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% next invokation must happen in this time, orelse ... BOOM!!!111oneoneeleventy
--define(INVOKATION_TIMEOUT, 4020).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% important types
@@ -375,7 +370,6 @@ zelf() ->
 
 -record(state, {
           test_proc :: pid(),
-          inv_to_ref :: reference(),
           strict :: [#expectation{}],
           strict_log :: [{strict_log,
                           ERef :: reference(),
@@ -457,7 +451,6 @@ programming(replay,
             _From,
             State = #state{strict = Strict}) ->
     MMs = install_mock_modules(State),
-    InvTORef = gen_fsm:start_timer(?INVOKATION_TIMEOUT, invokation_timeout),
     {reply,
      ok,
      case Strict of
@@ -465,19 +458,8 @@ programming(replay,
          _ -> replaying
      end,
      State#state{
-       inv_to_ref = InvTORef,
        strict = lists:reverse(Strict),
        mocked_modules = MMs}}.
-
-%%------------------------------------------------------------------------------
-%% @private
-%%------------------------------------------------------------------------------
--spec replaying(Event :: term(), StateData :: statedata()) ->
-                       {stop, Reason :: term(), NewStateData :: statedata()}.
-replaying({timeout, Ref, invokation_timeout},
-          State = #state{inv_to_ref = Ref,
-                         strict = Expectations}) ->
-    {stop,{invokation_timeout, {missing_invokations, Expectations}},State}.
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -491,7 +473,6 @@ replaying(I = {invokation, Mod, Fun, Args, IPid},
           From,
           State = #state{
             await_invokations_reply = AwInvRepl,
-            inv_to_ref = InvTORef,
             strict = [#expectation{
                          id     = ERef,
                          m      = Mod,
@@ -501,7 +482,6 @@ replaying(I = {invokation, Mod, Fun, Args, IPid},
                          listeners = Listeners}
                       |Rest]})
   when length(EArgs) == length(Args) ->
-    gen_fsm:cancel_timer(InvTORef),
     case check_args(Args, EArgs, IPid) of
         true ->
             gen_fsm:reply(From, Answer),
@@ -513,11 +493,8 @@ replaying(I = {invokation, Mod, Fun, Args, IPid},
                                 replaying
                         end,
             if NextState =:= replaying orelse AwInvRepl =:= nothing ->
-                    NextTimer = gen_fsm:start_timer(?INVOKATION_TIMEOUT,
-                                                    invokation_timeout),
                     {next_state, NextState,
-                     State#state{inv_to_ref = NextTimer,
-                                 strict=Rest,
+                     State#state{strict=Rest,
                                  strict_log =
                                      [{strict_log, ERef, IPid, Args}
                                       | State#state.strict_log]}};
@@ -538,25 +515,17 @@ replaying(I = {invokation, Mod, Fun, Args, IPid},
 replaying(I = {invokation, _M, _F, _A, _IPid},
           _From,
           State = #state{
-            inv_to_ref = InvTORef,
 	    strict = [E|_]}) ->
-    gen_fsm:cancel_timer(InvTORef),
     case handle_stub_invokation(I, State#state.stub) of
 	{ok, Answer} ->
-	    {reply, Answer, replaying,
-             State#state{
-               inv_to_ref = gen_fsm:start_timer(?INVOKATION_TIMEOUT, invokation_timeout)
-              }};
+	    {reply, Answer, replaying, State};
 
 	error ->
 	    Reason = {unexpected_invokation, {actual, I}, {expected, E}},
 	    {stop, Reason, Reason, State}
     end;
 
-replaying(verify,
-          _From,
-          State = #state{inv_to_ref = InvTORef}) ->
-    gen_fsm:cancel_timer(InvTORef),
+replaying(verify, _From, State) ->
     Reason = {invokations_missing, State#state.strict},
     {stop, Reason, Reason, State}.
 
@@ -569,8 +538,7 @@ replaying(verify,
                               NewStateData :: statedata()} |
                              {stop, Reason :: term(), Reply :: term(),
                               NewStateData :: statedata()}.
-no_expectations(I = {invokation, _M, _F, _A, _IPid}, _From, State = #state{inv_to_ref = InvTORef}) ->
-    gen_fsm:cancel_timer(InvTORef),
+no_expectations(I = {invokation, _M, _F, _A, _IPid}, _From, State) ->
     case handle_stub_invokation(I, State#state.stub) of
         {ok, Answer} ->
             {reply, Answer, no_expectations, State};
@@ -580,9 +548,7 @@ no_expectations(I = {invokation, _M, _F, _A, _IPid}, _From, State = #state{inv_t
             {stop, Reason, Reason, State}
     end;
 
-no_expectations(verify,
-         _From,
-         State) ->
+no_expectations(verify, _From, State) ->
     {stop, normal, ok, State}.
 
 %%------------------------------------------------------------------------------

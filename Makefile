@@ -1,9 +1,14 @@
 REBAR="./rebar"
 SHELL = /bin/sh
 
-.DEFAULT_GOAL := edoc
+.DEFAULT_GOAL := compile
 
-.PHONY = compile clean test edoc
+.PHONY = compile clean test edoc dep
+
+dep:
+	$(REBAR) get-deps
+	$(REBAR) update-deps
+	
 
 edoc:
 	$(REBAR) doc skip_deps=true
@@ -17,7 +22,6 @@ edoc:
 	git checkout master
 
 compile:
-	$(REBAR) get-deps
 	$(REBAR) compile
 
 eunit: compile clean

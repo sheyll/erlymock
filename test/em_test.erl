@@ -28,28 +28,6 @@ simple_strict_test() ->
     ok2 = some_other_mod:some_other_fun(),
     em:verify(M).
 
-invokation_timout_test() ->
-    Pid = spawn_link(fun() ->
-                             M = em:new(),
-                             em:strict(M, some_mod, some_fun, [a]),
-                             em:replay(M),
-                             receive ok -> ok end
-                     end),
-    process_flag(trap_exit, true),
-    receive
-        {'EXIT',
-         Pid,
-         Reason} ->
-            ?assertMatch({invokation_timeout,
-                          {missing_invokations,
-                           [{expectation,
-                             _Ref,
-                             some_mod,some_fun,[a],
-                             {return,ok},
-                             _Listeners}]}},
-                         Reason)
-    end.
-
 invalid_parameter_1_test() ->
     M = em:new(),
     em:strict(M, some_mod, some_fun, [a,
