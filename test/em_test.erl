@@ -33,7 +33,7 @@ invokation_timout_test() ->
                              M = em:new(),
                              em:strict(M, some_mod, some_fun, [a]),
                              em:replay(M),
-                             receive ok -> ok end
+                             receive never_to_receive -> ok end
                      end),
     process_flag(trap_exit, true),
     receive
@@ -44,6 +44,7 @@ invokation_timout_test() ->
                           {missing_invokations,
                            [{expectation,
                              _Ref,
+                             _Group,
                              some_mod,some_fun,[a],
                              {return,ok},
                              _Listeners}]}},
@@ -60,10 +61,10 @@ invalid_parameter_1_test() ->
     process_flag(trap_exit, true),
     ?assertMatch({'EXIT',
                   {{case_clause,
-                   {unexpected_function_parameter,
-                    {error_in_parameter, 1}, {expected, a}, {actual, 666},
-                    {invokation, some_mod, some_fun, [666, b], _}}},
-                   _}},
+                   {unexpected_invokation, _,
+                    [{parameter_mismatch,
+                      {parameter, 1}, {expected, a}, {actual, 666}, _}]}}},
+                  _},
                  catch some_mod:some_fun(666, b)).
 
 invalid_order_test() ->

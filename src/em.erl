@@ -26,6 +26,16 @@
 %%% was called with different arguments, the mock process dies and
 %%% prints a comprehensive error message before failing the test.</p>
 %%%
+%%% <p>To support mock invokations from multiple processes the strictness
+%%% requirement can be reduced to calls belonging to the same group. {@link
+%%% new_groups/2} creates a list of named groups, where calls belongig to
+%%% different groups may occur in any order. A group is passed as mock reference
+%%% (1st parameter) to {@link strict/5} or {@link strict/4}. Use {@link
+%%% await_groups/1} with a list of groups to block the caller until all groups
+%%% are finished, i.e. the expectations assigned to each group via {@link
+%%% strict/5} were invoked. NOTE: It is prohibited to use the same expectations
+%%% with different return values among a list groups created together.</p>
+%%%
 %%% <p>At the end of a unit test {@link await_expectations/1} is called to
 %%% await all invocations defined during the programming phase.</p>
 %%%
@@ -74,18 +84,20 @@
 
 %% public API ---
 -export([new/0,
+         new_groups/2,
+	 nothing/2,
+         lock/2,
          strict/4,
          strict/5,
+         any/0,
+         zelf/0,
          stub/4,
          stub/5,
          replay/1,
          await/2,
+   %      await_groups/1,
          await_expectations/1,
-         verify/1,
-         any/0,
-         zelf/0,
-	 nothing/2,
-         lock/2]).
+         verify/1]).
 
 %% gen_fsm callbacks ---
 -export([programming/3,
@@ -101,6 +113,8 @@
 
 %% !!!NEVER CALL THIS FUNCTION!!! ---
 -export([invoke/4]).
+
+-export_type([group/0, group_tag/0]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% next invokation must happen in this time, orelse ... BOOM!!!111oneoneeleventy
@@ -128,6 +142,12 @@
 -type answer() :: {function, fun(([any()]) -> any())}
                   | {return, any()} .
 
+%%------------------------------------------------------------------------------
+%% A group is a pair with a tag for a group and a mock process.
+%% ------------------------------------------------------------------------------
+-opaque group_tag() :: {term(), reference()}.
+-opaque group() :: {group, pid(), group_tag()}.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% API
 %%
@@ -146,10 +166,26 @@
 %% @end
 %%------------------------------------------------------------------------------
 -spec new() ->
-                 pid().
+                 group().
 new() ->
-    {ok, Pid} = gen_fsm:start_link(?MODULE, [erlang:self()], []),
-    Pid.
+    {ok, M} = gen_fsm:start_link(?MODULE, [erlang:self()], []),
+    RootTag = {root, make_ref()},
+    {group, M, RootTag}.
+
+%%------------------------------------------------------------------------------
+%% @doc
+%% Create a group handle to assign mock expectation to. The result can be passed
+%% to {@link strict/4} or {@link strict/5} and {@link await_groups/1}.
+%% @end
+%%------------------------------------------------------------------------------
+-spec new_groups(group(), [term()]) ->
+                       [group()].
+new_groups({group, M, _}, GroupNames) ->
+    GroupCluster = make_ref(),
+    [{group,
+      M,
+      {GroupName, GroupCluster}}
+     || GroupName <- GroupNames].
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -180,10 +216,9 @@ new() ->
 %% replay/1} - that is during the programming phase.
 %% @end
 %%------------------------------------------------------------------------------
--spec strict(pid(), atom(), atom(), args()) ->
+-spec strict(group(), atom(), atom(), args()) ->
                     reference().
-strict(M, Mod, Fun, Args)
-  when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
+strict(M, Mod, Fun, Args) ->
     strict(M, Mod, Fun, Args, {return, ok}).
 
 %%------------------------------------------------------------------------------
@@ -211,12 +246,13 @@ strict(M, Mod, Fun, Args)
 %%------------------------------------------------------------------------------
 -spec strict(pid(), atom(), atom(), args(), answer()) ->
                     reference().
-strict(M, Mod, Fun, Args, Answer = {return, _})
+strict({group, M, Group}, Mod, Fun, Args, Answer = {return, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
-    gen_fsm:sync_send_event(M, {strict, Mod, Fun, Args, Answer});
-strict(M, Mod, Fun, Args, Answer = {function, _})
+    gen_fsm:sync_send_event(M, {strict, Group, Mod, Fun, Args, Answer});
+
+strict({group, M, Group}, Mod, Fun, Args, Answer = {function, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
-    gen_fsm:sync_send_event(M, {strict, Mod, Fun, Args, Answer}).
+    gen_fsm:sync_send_event(M, {strict, Group, Mod, Fun, Args, Answer}).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -226,10 +262,9 @@ strict(M, Mod, Fun, Args, Answer = {function, _})
 %% @see strict/4. <code>strict/4</code>
 %% @end
 %%------------------------------------------------------------------------------
--spec stub(pid(), atom(), atom(), args()) ->
+-spec stub(group(), atom(), atom(), args()) ->
                   ok.
-stub(M, Mod, Fun, Args)
-  when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
+stub(M, Mod, Fun, Args) ->
     stub(M, Mod, Fun, Args, {return, ok}).
 
 %%------------------------------------------------------------------------------
@@ -241,12 +276,13 @@ stub(M, Mod, Fun, Args)
 %% @see strict/5. <code>strict/5</code>
 %% @end
 %%------------------------------------------------------------------------------
--spec stub(pid(), atom(), atom(), args(), answer()) ->
+-spec stub(group(), atom(), atom(), args(), answer()) ->
                   ok.
-stub(M, Mod, Fun, Args, Answer = {return, _})
+stub({group, M, {root, _}}, Mod, Fun, Args, Answer = {return, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
     ok = gen_fsm:sync_send_event(M, {stub, Mod, Fun, Args, Answer});
-stub(M, Mod, Fun, Args, Answer = {function, _})
+
+stub({group, M, {root, _}}, Mod, Fun, Args, Answer = {function, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
     ok = gen_fsm:sync_send_event(M, {stub, Mod, Fun, Args, Answer}).
 
@@ -257,9 +293,9 @@ stub(M, Mod, Fun, Args, Answer = {function, _})
 %% exception.
 %% @end
 %%------------------------------------------------------------------------------
--spec nothing(pid(), atom()) ->
+-spec nothing(group(), atom()) ->
 		     ok.
-nothing(M, Mod) when is_pid(M), is_atom(Mod) ->
+nothing({group, M, {root, _}}, Mod) when is_pid(M), is_atom(Mod) ->
    ok = gen_fsm:sync_send_event(M, {nothing, Mod}).
 
 %%------------------------------------------------------------------------------
@@ -268,9 +304,9 @@ nothing(M, Mod) when is_pid(M), is_atom(Mod) ->
 %% mocked by another erlymock process.
 %% @end
 %%------------------------------------------------------------------------------
--spec lock(pid(), [atom()]) ->
+-spec lock(group(), [atom()]) ->
 		     ok.
-lock(M, Mods) when is_pid(M), is_list(Mods) ->
+lock({group, M, {root, _}}, Mods) when is_pid(M), is_list(Mods) ->
    ok = em_module_locker:lock(M, Mods).
 
 %%------------------------------------------------------------------------------
@@ -285,8 +321,8 @@ lock(M, Mods) when is_pid(M), is_list(Mods) ->
 %% process dies and - if used in a typical edoc test suite - fails the test.
 %% @end
 %%------------------------------------------------------------------------------
--spec replay(M :: term()) -> ok.
-replay(M) ->
+-spec replay(group()) -> ok.
+replay({group, M, {root, _}}) ->
     ok = gen_fsm:sync_send_event(M, replay).
 
 %%------------------------------------------------------------------------------
@@ -299,12 +335,12 @@ replay(M) ->
 %% happened.</p><p>If the handle is not valid, an error is returned.</p>
 %% @end
 %% ------------------------------------------------------------------------------
--spec await(M :: term(), Handle :: reference()) ->
+-spec await(group(), reference()) ->
                    {success,
                     InvPid :: pid(),
                     Args :: [term()]} |
                    {error, invalid_handle}.
-await(M, Handle) ->
+await({group, M, {root, _}}, Handle) ->
     gen_fsm:sync_send_all_state_event(M, {await, Handle}, 5000).
 
 %%------------------------------------------------------------------------------
@@ -314,8 +350,8 @@ await(M, Handle) ->
 %% all modules installed.
 %% @end
 %%------------------------------------------------------------------------------
--spec await_expectations(M :: term()) -> ok.
-await_expectations(M) ->
+-spec await_expectations(group()) -> ok.
+await_expectations({group, M, {root, _}}) ->
     ok = gen_fsm:sync_send_all_state_event(M, await_expectations, 5000).
 
 %%------------------------------------------------------------------------------
@@ -326,8 +362,8 @@ await_expectations(M) ->
 %% Otherwise the mock process exits normally, returning <code>ok</code>.
 %% @end
 %%------------------------------------------------------------------------------
--spec verify(M :: term()) -> ok.
-verify(M) ->
+-spec verify(group()) -> ok.
+verify({group, M, {root, _}}) ->
     ok = gen_fsm:sync_send_event(M, verify).
 
 %%------------------------------------------------------------------------------
@@ -362,24 +398,28 @@ zelf() ->
 
 -record(expectation,
         {id :: reference(),
+         g :: group_tag(),
          m :: atom(),
          f :: atom(),
          a :: args(),
          answer :: answer(),
          listeners :: [GenFsmFrom :: term()]}).
 
+-record(strict_log, {
+          grpt :: group_tag(),
+          eref :: reference(),
+          ipid :: pid(),
+          args :: [term()]}).
+
 -record(state, {
           test_proc :: pid(),
           inv_to_ref :: reference(),
           strict :: [#expectation{}],
-          strict_log :: [{strict_log,
-                          ERef :: reference(),
-                          IPid :: pid(),
-                          Args :: [term()]}],
+          strict_log :: [#strict_log{}],
           stub  :: [#expectation{}],
 	  blacklist :: [atom()],
           mocked_modules :: [{atom(), {just, term()}|nothing}],
-          await_invokations_reply :: nothing | {just, term()}
+          on_finished :: term() % GenFsmFrom
          }).
 
 -type statedata() :: #state{}.
@@ -404,8 +444,7 @@ init([TestProc]) ->
         strict_log = [],
         stub = [],
         blacklist = [],
-        mocked_modules = [],
-        await_invokations_reply = nothing}}.
+        mocked_modules = []}}.
 
 
 %%------------------------------------------------------------------------------
@@ -414,7 +453,7 @@ init([TestProc]) ->
 -spec programming(Event :: term(), From :: term(), State :: statedata()) ->
                          {reply, Reply :: term(), NextState :: atom(),
                           NewStateData :: statedata()}.
-programming({strict, Mod, Fun, Args, Answer},
+programming({strict, _Group, Mod, Fun, Args, Answer},
             _From,
             State = #state{strict = Strict}) ->
     InvRef = make_ref(),
@@ -465,85 +504,25 @@ programming(replay,
        mocked_modules = MMs}}.
 
 %%------------------------------------------------------------------------------
-%% @private (goto-char 1)
+%% @private
 %%------------------------------------------------------------------------------
 -spec replaying(Event :: term(), StateData :: statedata()) ->
                        {stop, Reason :: term(), NewStateData :: statedata()}.
 replaying({timeout, Ref, invokation_timeout},
           State = #state{inv_to_ref = Ref,
                          strict = Expectations}) ->
-    {stop,{invokation_timeout, {missing_invokations, Expectations}},State}.
+    {stop, {invokation_timeout, {missing_invokations, Expectations}}, State}.
 
 -spec replaying(Event :: term(), From :: term(), StateData :: statedata()) ->
+                       {next_state, NextState :: atom(),
+                        NewStateData :: statedata()} |
                        {reply, Reply :: term(), NextState :: atom(),
                         NewStateData :: statedata()} |
                        {stop, Reason :: term(), Reply :: term(),
                         NewStateData :: statedata()}.
-replaying(I = {invokation, Mod, Fun, Args, IPid},
-          From,
-          State = #state{
-            await_invokations_reply = AwInvRepl,
-            inv_to_ref = InvTORef,
-            strict = [#expectation{
-                         id     = ERef,
-                         m      = Mod,
-                         f      = Fun,
-                         a      = EArgs,
-                         answer = Answer,
-                         listeners = Listeners}
-                      |Rest]})
-  when length(EArgs) == length(Args) ->
-    gen_fsm:cancel_timer(InvTORef),
-    case check_args(Args, EArgs, IPid) of
-        true ->
-            gen_fsm:reply(From, Answer),
-            [gen_fsm:reply(Listener, {success, IPid, Args})
-             || Listener <- Listeners],
-            NextState = case Rest of
-                            [] -> no_expectations;
-                            _ ->
-                                replaying
-                        end,
-            if NextState =:= replaying orelse AwInvRepl =:= nothing ->
-                    NextTimer = gen_fsm:start_timer(?INVOKATION_TIMEOUT,
-                                                    invokation_timeout),
-                    {next_state, NextState,
-                     State#state{inv_to_ref = NextTimer,
-                                 strict=Rest,
-                                 strict_log =
-                                     [{strict_log, ERef, IPid, Args}
-                                      | State#state.strict_log]}};
-               true ->
-                    {just, AIR} = AwInvRepl,
-                    gen_fsm:reply(AIR, ok),
-                    {stop, normal, State}
-            end;
-        {error, Index, Expected, Actual} ->
-            Reason = {unexpected_function_parameter,
-                      {error_in_parameter, Index},
-                      {expected, Expected},
-                      {actual, Actual},
-                      I},
-            {stop, normal, {'$em_error', Reason}, State}
-    end;
 
-replaying(I = {invokation, _M, _F, _A, _IPid},
-          _From,
-          State = #state{
-            inv_to_ref = InvTORef,
-	    strict = [E|_]}) ->
-    gen_fsm:cancel_timer(InvTORef),
-    case handle_stub_invokation(I, State#state.stub) of
-	{ok, Answer} ->
-	    {reply, Answer, replaying,
-             State#state{
-               inv_to_ref = gen_fsm:start_timer(?INVOKATION_TIMEOUT, invokation_timeout)
-              }};
-
-	error ->
-	    Reason = {unexpected_invokation, {actual, I}, {expected, E}},
-            {stop, normal, {'$em_error', Reason}, State}
-    end;
+replaying(Inv = {invokation, _M, _F, _A, _IPid}, From, State) ->
+    handle_invokation(Inv, From, State);
 
 replaying(verify,
           _From,
@@ -561,8 +540,7 @@ replaying(verify,
                               NewStateData :: statedata()} |
                              {stop, Reason :: term(), Reply :: term(),
                               NewStateData :: statedata()}.
-no_expectations(I = {invokation, _M, _F, _A, _IPid}, _From, State = #state{inv_to_ref = InvTORef}) ->
-    gen_fsm:cancel_timer(InvTORef),
+no_expectations(I = {invokation, _M, _F, _A, _IPid}, _From, State) ->
     case handle_stub_invokation(I, State#state.stub) of
         {ok, Answer} ->
             {reply, Answer, no_expectations, State};
@@ -582,7 +560,7 @@ no_expectations(verify,
 %%------------------------------------------------------------------------------
 -spec terminate(Reason :: term(), StateName :: atom(),
                 StateData :: statedata()) -> no_return().
-terminate(Reason, StateName, State) ->
+terminate(_Reason, _StateName, State) ->
     (catch unload_mock_modules(State)).
 
 %%------------------------------------------------------------------------------
@@ -607,8 +585,8 @@ handle_sync_event({await, H}, From, StateName, State) ->
 handle_sync_event(await_expectations, _From, no_expectations, State) ->
     {stop, normal, ok, State};
 handle_sync_event(await_expectations, From, StateName,
-                  State =  #state{await_invokations_reply = nothing}) ->
-    {next_state, StateName, State#state{await_invokations_reply = {just, From}}};
+                  State =  #state{on_finished = undefined}) ->
+    {next_state, StateName, State#state{on_finished = From}};
 handle_sync_event(_Evt, _From, _StateName, State) ->
     {stop, normal, ok, State}.
 
@@ -784,7 +762,8 @@ check_args(Args, ArgSpecs, InvokationPid) ->
          end
          || {I, A, E} <- lists:zip3(lists:seq(1, length(Args)),
                                     Args,
-                                    ArgSpecs)] of
+                                    ArgSpecs)]
+    of
         _ ->
             true
     catch
@@ -879,3 +858,149 @@ check_func(#expectation{m = Mod, f = Fun, a = Args}) ->
         _ ->
             ok
     end.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+handle_invokation(Inv, From, St0) ->
+    St1 = cancel_invokation_timer(St0),
+    case
+        find_matching_expectation(
+          Inv,
+          [],
+          get_next_expectations(St1)
+         )
+    of
+        {ok, E} ->
+            answer_invokation(Inv, E, From),
+            stop_or_continue_replay(
+              remove_expectation(
+                E,
+                log_invokation(Inv, E, St1)));
+
+        Error ->
+            {stop, Error, Error, St1}
+    end.
+
+%% ----------------------------------------------------------------------
+
+cancel_invokation_timer(St = #state{inv_to_ref = undefined}) ->
+    St;
+
+cancel_invokation_timer(St = #state{inv_to_ref = TimerRef}) ->
+    gen_fsm:cancel_timer(TimerRef),
+    St#state{inv_to_ref = undefined}.
+
+%% ----------------------------------------------------------------------
+
+get_next_expectations(#state{strict = Es, stub = StubEs}) ->
+    heads_by_group_tag(Es) ++ StubEs.
+
+heads_by_group_tag(Es) ->
+    lists:foldl(fun
+                   (#expectation{g = EG}, Acc = [#expectation{g = AG}|_])
+                      when EG =:= AG ->
+                        Acc;
+
+                    (E, Acc) ->
+                        [E|Acc]
+                end,
+                [],
+                lists:keysort(#expectation.g, Es)).
+
+%% ----------------------------------------------------------------------
+
+find_matching_expectation(I, Hints, []) ->
+    {error, {unexpected_invokation, I, Hints}};
+
+find_matching_expectation(I = {invokation, Mod, Fun, Args, IPid},
+                          Hints,
+                          [E|RestEs]) ->
+    case E of
+        #expectation{m = Mod,
+                     f = Fun,
+                     a = EArgs}
+        when
+              length(EArgs) == length(Args) ->
+            case check_args(Args, EArgs, IPid) of
+                true ->
+                    {ok, E};
+
+                {error, Index, Expected, Actual} ->
+                    Hint = {parameter_mismatch,
+                            {parameter, Index},
+                            {expected, Expected},
+                            {actual, Actual},
+                            E},
+                    find_matching_expectation(I, [Hint|Hints], RestEs)
+            end;
+
+        _ ->
+            Hint = {mfa_mismatch, E},
+            find_matching_expectation(I, [Hint|Hints], RestEs)
+    end.
+
+%% ----------------------------------------------------------------------
+
+answer_invokation({invokation, _Mod, _Fun, Args, IPid},
+                  #expectation{answer    = Answer,
+                               listeners = Listeners},
+                  From) ->
+    gen_fsm:reply(From, Answer),
+    [gen_fsm:reply(Listener, {success, IPid, Args}) || Listener <- Listeners].
+
+%% ----------------------------------------------------------------------
+
+remove_expectation(#expectation{id = EId},
+                   St = #state{strict = Stricts}) ->
+
+    St#state {
+      strict = lists:keydelete(
+                 EId,
+                 #expectation.id,
+                 Stricts)
+     }.
+
+%% ----------------------------------------------------------------------
+
+log_invokation({invokation, _Mod, _Fun, Args, IPid},
+               #expectation {
+                 id = EId,
+                 g = GroupTag
+                },
+               St = #state{ strict_log = Log }) ->
+    St#state {
+      strict_log = [#strict_log {
+                      eref = EId,
+                       grpt = GroupTag,
+                       ipid = IPid,
+                       args = Args
+                      } | Log]
+     }.
+
+%% ----------------------------------------------------------------------
+
+stop_or_continue_replay(St = #state{
+                          strict = Expectations,
+                          on_finished = OnFinished
+                         }) ->
+    case {Expectations, OnFinished} of
+
+        {[], undefined} ->
+            {next_state, no_expectations, St};
+
+        {[_|_], _} ->
+            St1 = start_invokation_timer(St),
+            {next_state, replaying, St1};
+
+        {[], OnFinished} ->
+            gen_fsm:reply(OnFinished, ok),
+            {stop, normal, St}
+    end.
+
+%% ----------------------------------------------------------------------
+%% TODO use this function more often
+start_invokation_timer(St) ->
+    NextTimer = gen_fsm:start_timer(?INVOKATION_TIMEOUT,
+                                    invokation_timeout),
+    St#state{inv_to_ref = NextTimer}.
