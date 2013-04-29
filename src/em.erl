@@ -524,7 +524,7 @@ replaying(I = {invokation, Mod, Fun, Args, IPid},
                       {expected, Expected},
                       {actual, Actual},
                       I},
-            {stop, Reason, Reason, State}
+            {stop, normal, {'$em_error', Reason}, State}
     end;
 
 replaying(I = {invokation, _M, _F, _A, _IPid},
@@ -542,7 +542,7 @@ replaying(I = {invokation, _M, _F, _A, _IPid},
 
 	error ->
 	    Reason = {unexpected_invokation, {actual, I}, {expected, E}},
-	    {stop, Reason, Reason, State}
+            {stop, normal, {'$em_error', Reason}, State}
     end;
 
 replaying(verify,
@@ -582,9 +582,8 @@ no_expectations(verify,
 %%------------------------------------------------------------------------------
 -spec terminate(Reason :: term(), StateName :: atom(),
                 StateData :: statedata()) -> no_return().
-terminate(Reason, _StateName, State = #state{test_proc = TestProc}) ->
-    unload_mock_modules(State),
-    exit(TestProc, Reason).
+terminate(Reason, StateName, State) ->
+    (catch unload_mock_modules(State)).
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -641,12 +640,19 @@ handle_event(_Msg, _StateName, State) ->
 -spec invoke(M :: term(), Mod :: term(), Fun :: fun(), Args :: list()) ->
                     {Value :: term()}.
 invoke(M, Mod, Fun, Args) ->
-    case gen_fsm:sync_send_event(M, {invokation, Mod, Fun, Args, self()}) of
-        {return, Value} ->
-            Value;
-        {function, F} ->
-            F(Args)
-    end.
+    (catch io:format("~nEM: ~w:~w ~p",[Mod,Fun, Args])),
+    Trace = erlang:get_stacktrace(),
+    Rv = case gen_fsm:sync_send_event(M, {invokation, Mod, Fun, Args, self()}) of
+             {return, Value} ->
+                 Value;
+             { '$em_error' , WTF} ->
+                 (catch io:format(" *ERROR* ->  ~p~nAT: ~p~n~n",[WTF, Trace])),
+                 exit({mock_error, WTF});
+             {function, F} ->
+                 F(Args)
+         end,
+    (catch io:format(" ->  ~p~n",[Rv])),
+    Rv.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% internal functions
@@ -656,11 +662,11 @@ invoke(M, Mod, Fun, Args) ->
 %%------------------------------------------------------------------------------
 unload_mock_modules(#state{mocked_modules = MMs}) ->
     [begin
-   code:purge(Mod),
+         code:purge(Mod),
 	 code:delete(Mod),
 	 code:purge(Mod),
          case MaybeBin of
-              nothing ->
+             nothing ->
                  ignore;
              {just, {Mod, CoverCompiledBinary}} ->
                  code:load_binary(Mod, cover_compiled, CoverCompiledBinary)
@@ -677,6 +683,7 @@ install_mock_modules(#state{strict = ExpectationsStrict,
     Expectations = ExpectationsStub ++ ExpectationsStrict,
     ModulesToMock = lists:usort([M || #expectation{m = M} <- Expectations] ++ BlackList),
     em_module_locker:lock(erlang:self(), ModulesToMock),
+    [check_func(Ex) || Ex <- Expectations],
     [install_mock_module(M, Expectations) || M <- ModulesToMock].
 
 %%------------------------------------------------------------------------------
@@ -686,6 +693,8 @@ install_mock_module(Mod, Expectations) ->
     MaybeBin = get_cover_compiled_binary(Mod),
     ModHeaderSyn = [erl_syntax:attribute(erl_syntax:atom(module),
 					 [erl_syntax:atom(Mod)]),
+                    erl_syntax:attribute(erl_syntax:atom(erlymock_generated),
+					 [erl_syntax:atom(true)]),
                     erl_syntax:attribute(erl_syntax:atom(compile),
                                          [erl_syntax:list(
                                             [erl_syntax:atom(export_all)])])],
@@ -843,4 +852,30 @@ add_invokation_listener(From, Ref, State = #state{strict=Strict,
             NewE = E#expectation{listeners = [From|Ls]},
             NewStrict = lists:keyreplace(Ref, 2, Strict, NewE),
             State#state{strict = NewStrict}
+    end.
+
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+check_func(#expectation{m = Mod, f = Fun, a = Args}) ->
+    code:purge(Mod),
+    code:delete(Mod),
+    code:purge(Mod),
+    case code:load_file(Mod) of
+        {module, Mod} ->
+            case erlang:function_exported(Mod, Fun, length(Args)) of
+                false ->
+                    throw({'_______________em_invalid_mock_program_______________',
+                           lists:flatten(
+                             io_lib:format(
+                               "erly_mock: mocked function not exported: ~w:~w/~w",
+                               [Mod, Fun, length(Args)])),
+                           Args});
+                true ->
+                    ok
+            end;
+
+        _ ->
+            ok
     end.
