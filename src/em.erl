@@ -403,7 +403,7 @@ zelf() ->
          f :: atom(),
          a :: args(),
          answer :: answer(),
-         listeners :: [GenFsmFrom :: term()]}).
+         listeners = [] :: [GenFsmFrom :: term()]}).
 
 -record(strict_log, {
           grpt :: group_tag(),
@@ -816,13 +816,15 @@ get_cover_compiled_binary(Mod) ->
 add_invokation_listener(From, Ref, State = #state{strict=Strict,
                                                   strict_log = StrictSucc}) ->
     %% if the invokation does not exist, check the strict_history
-    case lists:keyfind(Ref, 2, Strict) of
+    case lists:keyfind(Ref, #expectation.id, Strict) of
         false ->
-            case lists:keyfind(Ref, 2, StrictSucc) of
+            case lists:keyfind(Ref, #strict_log.eref, StrictSucc) of
                 false ->
                     gen_fsm:reply(From, {error, invalid_handle});
 
-                {strict_log, _ERef, IPid, Args} ->
+                #strict_log{ args = Args,
+                             ipid = IPid
+                           } ->
                     gen_fsm:reply(From, {success, IPid, Args})
             end,
             State;

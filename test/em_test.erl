@@ -61,10 +61,11 @@ invalid_parameter_1_test() ->
     process_flag(trap_exit, true),
     ?assertMatch({'EXIT',
                   {{case_clause,
-                   {unexpected_invokation, _,
-                    [{parameter_mismatch,
-                      {parameter, 1}, {expected, a}, {actual, 666}, _}]}}},
-                  _},
+                    {error,
+                     {unexpected_invokation, _,
+                      [{parameter_mismatch,
+                        {parameter, 1}, {expected, a}, {actual, 666}, _}]}}},
+                   _}},
                  catch some_mod:some_fun(666, b)).
 
 invalid_order_test() ->
@@ -75,11 +76,10 @@ invalid_order_test() ->
     process_flag(trap_exit, true),
     ?assertMatch({'EXIT',
                   {{case_clause,
-                    {unexpected_invokation,
-                     {actual,{invokation,some_mod,some_fun,[a], _}},
-                     {expected,{expectation,_Ref, some_mod,some_fun,[a,b],
-                                {return,ok},
-                                _Listeners}}}}, _}},
+                    {error,
+                     {unexpected_invokation,
+                      _,
+                      _}}}, _}},
                  catch some_mod:some_fun(a)).
 
 too_many_invokations_test() ->
@@ -88,9 +88,11 @@ too_many_invokations_test() ->
     em:replay(M),
     ok = some_mod:some_fun(a, b),
     process_flag(trap_exit, true),
-    ?assertMatch({'EXIT', {{case_clause,{unexpected_invokation,
-                                         {actual,
-                                          {invokation,some_mod,some_fun,[a, b], _}}}}, _}},
+    ?assertMatch({'EXIT',
+                  {{case_clause,
+                    {unexpected_invokation,
+                     {actual,
+                      {invokation,some_mod,some_fun,[a, b], _}}}}, _}},
                  catch some_mod:some_fun(a, b)).
 
 invokations_missing_test() ->
@@ -98,10 +100,12 @@ invokations_missing_test() ->
     em:strict(M, some_mod, some_fun, [a,b]),
     em:replay(M),
     process_flag(trap_exit, true),
-    ?assertError({badmatch,
-                  {invokations_missing,
-                   [{expectation,_, some_mod,some_fun,[a,b],{return,ok}, _}]}},
-                 em:verify(M)).
+    ?assertMatch({'EXIT',
+                  {{badmatch,
+                    {invokations_missing,
+                     [{expectation,_, some_mod,some_fun,[a,b],{return,ok}, _}]},
+                    _}}},
+                 (catch em:verify(M))).
 
 invalid_parameter_2_test() ->
     M = em:new(),
@@ -112,11 +116,8 @@ invalid_parameter_2_test() ->
     em:replay(M),
     process_flag(trap_exit, true),
     ?assertMatch({'EXIT', {{case_clause,
-                            {unexpected_function_parameter,
-                             {error_in_parameter, 2},
-                             {expected, _},
-                             {actual, 666},
-                             {invokation, some_mod, some_fun, [a, 666], _}}}, _}},
+                            {error, {unexpected_invokation,
+                                     _, _}}}, _}},
                  catch(some_mod:some_fun(a, 666))).
 
 strict_and_stub_test() ->
