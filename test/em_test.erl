@@ -102,9 +102,8 @@ invokations_missing_test() ->
     process_flag(trap_exit, true),
     ?assertMatch({'EXIT',
                   {{badmatch,
-                    {invokations_missing,
-                     [{expectation,_, some_mod,some_fun,[a,b],{return,ok}, _}]},
-                    _}}},
+                    {invokations_missing, [_]}},
+                    _}},
                  (catch em:verify(M))).
 
 invalid_parameter_2_test() ->
