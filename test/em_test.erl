@@ -289,3 +289,28 @@ await_test() ->
     mod:f3(),
     ?assertEqual({error, invalid_handle}, em:await(M, xxx)),
     em:verify(M).
+
+two_groups_test() ->
+    M = em:new(),
+
+    em:strict(M, m1, f1, []),
+
+    [G1, G2] = em:new_groups(M, [g1, g2]),
+    em:strict(G1, g1, f1, []),
+    em:strict(G1, g1, f2, []),
+    em:strict(G2, g2, f1, []),
+    em:strict(G2, g2, f2, []),
+
+    em:strict(M, m1, f2, []),
+    em:replay(M),
+
+    m1:f1(),
+
+    g2:f1(),
+    g1:f1(),
+    g1:f2(),
+    g2:f2(),
+
+    m1:f2(),
+
+    em:await_expectations(M).

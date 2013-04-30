@@ -453,7 +453,7 @@ init([TestProc]) ->
 -spec programming(Event :: term(), From :: term(), State :: statedata()) ->
                          {reply, Reply :: term(), NextState :: atom(),
                           NewStateData :: statedata()}.
-programming({strict, _Group, Mod, Fun, Args, Answer},
+programming({strict, Group, Mod, Fun, Args, Answer},
             _From,
             State = #state{strict = Strict}) ->
     InvRef = make_ref(),
@@ -462,6 +462,7 @@ programming({strict, _Group, Mod, Fun, Args, Answer},
      programming,
      State#state{
        strict = [#expectation{id = InvRef,
+                              g = Group,
                               m = Mod,
                               f = Fun,
                               a = Args,
