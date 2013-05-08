@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuite failures="0" time="4216" errors="0" skipped="0" tests="18" name="em.em_test">
+  <testcase time="15" classname="em.em_test" name="simple_strict_test0">
+  </testcase>
+  <testcase time="4026" classname="em.em_test" name="invokation_timout_test0">
+  </testcase>
+  <testcase time="8" classname="em.em_test" name="invalid_parameter_1_test0">
+  </testcase>
+  <testcase time="5" classname="em.em_test" name="invalid_order_test0">
+  </testcase>
+  <testcase time="5" classname="em.em_test" name="too_many_invokations_test0">
+  </testcase>
+  <testcase time="5" classname="em.em_test" name="invokations_missing_test0">
+  </testcase>
+  <testcase time="6" classname="em.em_test" name="invalid_parameter_2_test0">
+  </testcase>
+  <testcase time="14" classname="em.em_test" name="strict_and_stub_test0">
+  </testcase>
+  <testcase time="15" classname="em.em_test" name="stub_only_test0">
+  </testcase>
+  <testcase time="6" classname="em.em_test" name="fun_answer_test0">
+  </testcase>
+  <testcase time="8" classname="em.em_test" name="empty_stub_test0">
+  </testcase>
+  <testcase time="0" classname="em.em_test" name="empty_test0">
+  </testcase>
+  <testcase time="0" classname="em.em_test" name="check_arguments_test0">
+  </testcase>
+  <testcase time="0" classname="em.em_test" name="gen_fsm_unimplemented_stops_test0">
+  </testcase>
+  <testcase time="14" classname="em.em_test" name="nothing_test0">
+  </testcase>
+  <testcase time="15" classname="em.em_test" name="auto_lock_test0">
+  </testcase>
+  <testcase time="22" classname="em.em_test" name="explicit_lock_test0">
+  </testcase>
+  <testcase time="8" classname="em.em_test" name="em_zelf_test0">
+  </testcase>
+</testsuite>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuite failures="0" time="4428" errors="0" skipped="0" tests="2" name="em.em_module_locker_test">
+  <testcase time="4400" classname="em.em_module_locker_test" name="remove_lock_after_some_time_test0">
+  </testcase>
+  <testcase time="22" classname="em.em_module_locker_test" name="simple_lock_and_unlock_test0">
+  </testcase>
+</testsuite>

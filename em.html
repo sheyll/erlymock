@@ -42,6 +42,13 @@ The module name 'em' stands for 'Erly Mock'.</p>
    was called with different arguments, the mock process dies and
    prints a comprehensive error message before failing the test.</p>
   
+   <p>To support mock invokations from multiple processes the strictness
+   requirement can be reduced to calls belonging to the same group. <a href="#new_groups-2"><code>new_groups/2</code></a> creates a list of named groups, where calls belongig to
+   different groups may occur in any order. A group is passed as mock reference
+   (1st parameter) to <a href="#strict-5"><code>strict/5</code></a> or <a href="#strict-4"><code>strict/4</code></a>. Use <a href="#await_groups-1"><code>await_groups/1</code></a> with a list of groups to block the caller until all groups
+   are finished, i.e. the expectations assigned to each group via <a href="#strict-5"><code>strict/5</code></a> were invoked. NOTE: It is prohibited to use the same expectations
+   with different return values among a list groups created together.</p>
+  
    <p>At the end of a unit test <a href="#await_expectations-1"><code>await_expectations/1</code></a> is called to
    await all invocations defined during the programming phase.</p>
   
@@ -70,6 +77,18 @@ implies, that tests that mock the same modules must be run sequentially.</p>
 <p><tt>args() = [fun((any()) -&gt; true | false) | term()]</tt></p>
 
 
+<h3 class="typedecl"><a name="type-group">group()</a></h3>
+<p><tt>group() = {group, pid(), <a href="#type-group_tag">group_tag()</a>}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-group_tag">group_tag()</a></h3>
+<p><tt>group_tag() = {term(), reference()}</tt></p>
+
+
+<h3 class="typedecl"><a name="type-statedata">statedata()</a></h3>
+<p><tt>statedata() = #state{}</tt></p>
+
+
 <h2><a name="index">Function Index</a></h2>
 <table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#any-0">any/0</a></td><td>
   Utility function that can be used as a match function in an argument list
@@ -79,17 +98,22 @@ implies, that tests that mock the same modules must be run sequentially.</p>
   programming phase was made.</td></tr>
 <tr><td valign="top"><a href="#await_expectations-1">await_expectations/1</a></td><td>
   Wait until all invokations defined during the programming phase were made.</td></tr>
-<tr><td valign="top"><a href="#new-0">new/0</a></td><td>
-  Spawn a linked mock process and return the pid.</td></tr>
+<tr><td valign="top"><a href="#lock-2">lock/2</a></td><td>
+  The function will block until all modules in the list are not
+  mocked by another erlymock process.</td></tr>
+<tr><td valign="top"><a href="#new-0">new/0</a></td><td>.</td></tr>
+<tr><td valign="top"><a href="#new_groups-2">new_groups/2</a></td><td>
+  Create a group handle to assign mock expectation to.</td></tr>
 <tr><td valign="top"><a href="#nothing-2">nothing/2</a></td><td>
   This is used to express the expectation that no function of a certain module
   is called.</td></tr>
 <tr><td valign="top"><a href="#replay-1">replay/1</a></td><td>
   Finishes the programming phase and switches to the replay phase where the
   actual code under test may run and invoke the functions mocked.</td></tr>
-<tr><td valign="top"><a href="#strict-4">strict/4</a></td><td>  
-Add an expectation during the programming phase for a specific function  
-invokation.</td></tr>
+<tr><td valign="top"><a href="#replaying-3">replaying/3</a></td><td></td></tr>
+<tr><td valign="top"><a href="#strict-4">strict/4</a></td><td>
+  Add an expectation during the programming phase for a specific function
+  invokation.</td></tr>
 <tr><td valign="top"><a href="#strict-5">strict/5</a></td><td>
   This function behaves like <a href="#strict-4"><code>strict/4</code></a>
   and additionally accepts a return value or an answer function.</td></tr>
@@ -118,7 +142,7 @@ invokation.</td></tr>
 
 <h3 class="function"><a name="await-2">await/2</a></h3>
 <div class="spec">
-<p><tt>await(M::term(), Handle::reference()) -&gt; {success, InvPid::pid(), Args::[term()]} | {error, invalid_handle}</tt><br></p>
+<p><tt>await(X1::<a href="#type-group">group()</a>, Handle::reference()) -&gt; {success, InvPid::pid(), Args::[term()]} | {error, invalid_handle}</tt><br></p>
 </div><p>
   Block until a specific invokation defined via <a href="#strict-4"><code>strict/4</code></a> during the
   programming phase was made. <p>The handle for the specific invokation is the
@@ -129,17 +153,24 @@ invokation.</td></tr>
 
 <h3 class="function"><a name="await_expectations-1">await_expectations/1</a></h3>
 <div class="spec">
-<p><tt>await_expectations(M::term()) -&gt; ok</tt><br></p>
+<p><tt>await_expectations(X1::<a href="#type-group">group()</a>) -&gt; ok</tt><br></p>
 </div><p>
   Wait until all invokations defined during the programming phase were made.
   After this functions returns, the mock can be expected to exit and clean up
   all modules installed.</p>
 
+<h3 class="function"><a name="lock-2">lock/2</a></h3>
+<div class="spec">
+<p><tt>lock(X1::<a href="#type-group">group()</a>, Mods::[atom()]) -&gt; ok</tt><br></p>
+</div><p>
+  The function will block until all modules in the list are not
+  mocked by another erlymock process.</p>
+
 <h3 class="function"><a name="new-0">new/0</a></h3>
 <div class="spec">
-<p><tt>new() -&gt; pid()</tt><br></p>
+<p><tt>new() -&gt; <a href="#type-group">group()</a></tt><br></p>
 </div><p>
-  Spawn a linked mock process and return the pid. <p>This is usually the
+  <p>Spawn a linked mock process and returns it's pid. This is usually the
   first thing to do in each unit test. The resulting pid is used in the other
   functions below.</p> <p>NOTE: only a single mock proccess is required for a
   single unit test case. One mock process can mock an arbitrary number of
@@ -149,9 +180,16 @@ invokation.</td></tr>
   automatically cleans up and exits.</p> <p>After new() the mock is in
   'programming' state.</p></p>
 
+<h3 class="function"><a name="new_groups-2">new_groups/2</a></h3>
+<div class="spec">
+<p><tt>new_groups(X1::<a href="#type-group">group()</a>, GroupNames::[term()]) -&gt; [<a href="#type-group">group()</a>]</tt><br></p>
+</div><p>
+  Create a group handle to assign mock expectation to. The result can be passed
+  to <a href="#strict-4"><code>strict/4</code></a> or <a href="#strict-5"><code>strict/5</code></a> and <a href="#await_groups-1"><code>await_groups/1</code></a>.</p>
+
 <h3 class="function"><a name="nothing-2">nothing/2</a></h3>
 <div class="spec">
-<p><tt>nothing(M::pid(), Mod::atom()) -&gt; ok</tt><br></p>
+<p><tt>nothing(X1::<a href="#type-group">group()</a>, Mod::atom()) -&gt; ok</tt><br></p>
 </div><p>
   This is used to express the expectation that no function of a certain module
   is called. This will cause each function call on a module to throw an 'undef'
@@ -159,7 +197,7 @@ invokation.</td></tr>
 
 <h3 class="function"><a name="replay-1">replay/1</a></h3>
 <div class="spec">
-<p><tt>replay(M::term()) -&gt; ok</tt><br></p>
+<p><tt>replay(X1::<a href="#type-group">group()</a>) -&gt; ok</tt><br></p>
 </div><p>
   Finishes the programming phase and switches to the replay phase where the
   actual code under test may run and invoke the functions mocked. This may
@@ -170,17 +208,20 @@ invokation.</td></tr>
   if the application calls a function not expected on a mocked module, the mock
   process dies and - if used in a typical edoc test suite - fails the test.</p>
 
+<h3 class="function"><a name="replaying-3">replaying/3</a></h3>
+<div class="spec">
+<p><tt>replaying(Event::term(), From::term(), StateData::<a href="#type-statedata">statedata()</a>) -&gt; {next_state, NextState::atom(), NewStateData::<a href="#type-statedata">statedata()</a>} | {reply, Reply::term(), NextState::atom(), NewStateData::<a href="#type-statedata">statedata()</a>} | {stop, Reason::term(), Reply::term(), NewStateData::<a href="#type-statedata">statedata()</a>}</tt><br></p>
+</div>
+
 <h3 class="function"><a name="strict-4">strict/4</a></h3>
 <div class="spec">
-<p><tt>strict(M::pid(), Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>) -&gt; reference()</tt><br></p>
-</div><p><p>  
-Add an expectation during the programming phase for a specific function  
-invokation.</p>
- 
+<p><tt>strict(M::<a href="#type-group">group()</a>, Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>) -&gt; reference()</tt><br></p>
+</div><p>
+  Add an expectation during the programming phase for a specific function
+  invokation.
   <p>All expectations defined by 'strict' define an order in which the
   application must call the mocked functions, hence the name 'strict' as oposed
   to 'stub' (see below).</p>
- 
   <p>The parameters are:
   <ul>
   <li><code>M</code> the mock pid, returned by <a href="#new-0"><code>new/0</code></a></li>
@@ -191,22 +232,19 @@ invokation.</p>
   of the parameter at that position, or a predicate function which will be
   applied to the actual argument.</li>
   </ul></p>
- 
-  <p>This function returns a reference that identifies the expectation. This
-  reference can be passed to <a href="#await-2"><code>await/2</code></a> which blocks until the expected
-  invokation happens.</p>
- 
-  <p> The return value, that the application will get when calling the mocked
+  <p>This function returns a term that identifies this expectations so that the
+  code under test can call <a href="#await-2"><code>await/2</code></a> to block until this expectation is
+  fullfilled.</p>
+  <p>
+  The return value, that the application will get when calling the mocked
   function in the replay phase is simply the atom <code>ok</code>. This
   differentiates this function from <a href="#strict-5"><code>strict/5</code></a>, which allows the
   definition of a custom response function or a custom return value.  </p>
- 
-  NOTE: This function may only be called between <code>new/0</code> and <a href="#replay-1"><code>replay/1</code></a> - that is during the programming phase.
- </p>
+  NOTE: This function may only be called between <code>new/0</code> and <a href="#replay-1"><code>replay/1</code></a> - that is during the programming phase.</p>
 
 <h3 class="function"><a name="strict-5">strict/5</a></h3>
 <div class="spec">
-<p><tt>strict(M::pid(), Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>, Answer::<a href="#type-answer">answer()</a>) -&gt; reference()</tt><br></p>
+<p><tt>strict(X1::<a href="#type-group">group()</a>, Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>, Answer::<a href="#type-answer">answer()</a>) -&gt; reference()</tt><br></p>
 </div><p>
   This function behaves like <a href="#strict-4"><code>strict/4</code></a>
   and additionally accepts a return value or an answer function. That parameter
@@ -230,7 +268,7 @@ invokation.</p>
 
 <h3 class="function"><a name="stub-4">stub/4</a></h3>
 <div class="spec">
-<p><tt>stub(M::pid(), Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>) -&gt; ok</tt><br></p>
+<p><tt>stub(M::<a href="#type-group">group()</a>, Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>) -&gt; ok</tt><br></p>
 </div><p>
   Defines a what happens when a function is called whithout recording any
   expectations. The invocations defined by this function may happen in any order
@@ -239,7 +277,7 @@ invokation.</p>
 
 <h3 class="function"><a name="stub-5">stub/5</a></h3>
 <div class="spec">
-<p><tt>stub(M::pid(), Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>, Answer::<a href="#type-answer">answer()</a>) -&gt; ok</tt><br></p>
+<p><tt>stub(X1::<a href="#type-group">group()</a>, Mod::atom(), Fun::atom(), Args::<a href="#type-args">args()</a>, Answer::<a href="#type-answer">answer()</a>) -&gt; ok</tt><br></p>
 </div><p>
   This is similar <code>stub/4</code> except that it, like
   <code>strict/5</code> allows the definition of a return value
@@ -248,7 +286,7 @@ invokation.</p>
 
 <h3 class="function"><a name="verify-1">verify/1</a></h3>
 <div class="spec">
-<p><tt>verify(M::term()) -&gt; ok</tt><br></p>
+<p><tt>verify(X1::<a href="#type-group">group()</a>) -&gt; ok</tt><br></p>
 </div><p>
   Finishes the replay phase. If the code under test did not cause all expected
   invokations defined by <a href="#strict-4"><code>strict/4</code></a> or <a href="#strict-5"><code>strict/5</code></a>, the
@@ -265,6 +303,6 @@ invokation.</p>
 <hr>
 
 <div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
-<p><i>Generated by EDoc, Jan 2 2013, 00:46:26.</i></p>
+<p><i>Generated by EDoc, May 8 2013, 12:02:32.</i></p>
 </body>
 </html>
