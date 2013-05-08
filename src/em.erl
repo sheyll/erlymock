@@ -145,8 +145,8 @@
 %%------------------------------------------------------------------------------
 %% A group is a pair with a tag for a group and a mock process.
 %% ------------------------------------------------------------------------------
--opaque group_tag() :: {term(), reference()}.
--opaque group() :: {group, pid(), group_tag()}.
+-type group_tag() :: {term(), reference()}.
+-type group() :: {group, pid(), group_tag()}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% API
@@ -244,7 +244,7 @@ strict(M, Mod, Fun, Args) ->
 %% </ul>
 %% @end
 %%------------------------------------------------------------------------------
--spec strict(pid(), atom(), atom(), args(), answer()) ->
+-spec strict(group(), atom(), atom(), args(), answer()) ->
                     reference().
 strict({group, M, Group}, Mod, Fun, Args, Answer = {return, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
