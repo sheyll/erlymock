@@ -104,6 +104,7 @@
          replaying/2,
          replaying/3,
          no_expectations/3,
+         deranged/3,
          terminate/3,
          init/1,
          code_change/4,
@@ -339,9 +340,9 @@ replay({group, M, {root, _}}) ->
                    {success,
                     InvPid :: pid(),
                     Args :: [term()]} |
-                   {error, invalid_handle}.
+                   {error, term()}.
 await({group, M, {root, _}}, Handle) ->
-    gen_fsm:sync_send_all_state_event(M, {await, Handle}, 5000).
+    gen_fsm:sync_send_event(M, {await, Handle}, 5000).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -352,7 +353,17 @@ await({group, M, {root, _}}, Handle) ->
 %%------------------------------------------------------------------------------
 -spec await_expectations(group()) -> ok.
 await_expectations({group, M, {root, _}}) ->
-    ok = gen_fsm:sync_send_all_state_event(M, await_expectations, 5000).
+    case
+        gen_fsm:sync_send_event(M, await_expectations, 5000)
+    of
+        ok ->
+            ok;
+
+        Error ->
+            error_logger:error_msg("erlymock verification failed: ~p",
+                                   [Error]),
+            error(Error)
+    end.
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -364,7 +375,17 @@ await_expectations({group, M, {root, _}}) ->
 %%------------------------------------------------------------------------------
 -spec verify(group()) -> ok.
 verify({group, M, {root, _}}) ->
-    ok = gen_fsm:sync_send_event(M, verify).
+    case
+        gen_fsm:sync_send_event(M, verify, infinity)
+    of
+        ok ->
+            ok;
+
+        Error ->
+            error_logger:error_msg("erlymock verification failed: ~p",
+                                   [Error]),
+            error(Error)
+    end.
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -397,30 +418,31 @@ zelf() ->
 %%
 
 -record(expectation,
-        {id :: reference(),
-         g :: group_tag(),
-         m :: atom(),
-         f :: atom(),
-         a :: args(),
-         answer :: answer(),
-         listeners = [] :: [GenFsmFrom :: term()]}).
+        {id               :: reference(),
+         g                :: group_tag(),
+         m                :: atom(),
+         f                :: atom(),
+         a                :: args(),
+         answer           :: answer(),
+         listeners = []   :: [GenFsmFrom :: term()]}).
 
--record(strict_log, {
-          grpt :: group_tag(),
-          eref :: reference(),
-          ipid :: pid(),
-          args :: [term()]}).
+-record(strict_log,
+        {grpt             :: group_tag(),
+         eref             :: reference(),
+         ipid             :: pid(),
+         args             :: [term()]}).
 
--record(state, {
-          test_proc :: pid(),
-          inv_to_ref :: reference(),
-          strict :: [#expectation{}],
-          strict_log :: [#strict_log{}],
-          stub  :: [#expectation{}],
-	  blacklist :: [atom()],
-          mocked_modules :: [{atom(), {just, term()}|nothing}],
-          on_finished :: term() % GenFsmFrom
-         }).
+-record(state,
+        {test_proc        :: pid(),
+         inv_to_ref       :: reference(),
+         strict           :: [#expectation{}],
+         strict_log       :: [#strict_log{}],
+         stub             :: [#expectation{}],
+         blacklist        :: [atom()],
+         mocked_modules   :: [{atom(), {just, term()}|nothing}],
+         on_finished      :: term(), % GenFsmFrom
+         error = no_error :: no_error | term()
+        }).
 
 -type statedata() :: #state{}.
 
@@ -502,7 +524,12 @@ programming(replay,
      State#state{
        inv_to_ref = InvTORef,
        strict = lists:reverse(Strict),
-       mocked_modules = MMs}}.
+       mocked_modules = MMs}};
+
+programming(Event, _From, State) ->
+    {reply, {error, {bad_request, programming, Event}}, programming, State}.
+
+
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -525,36 +552,86 @@ replaying({timeout, Ref, invokation_timeout},
 replaying(Inv = {invokation, _M, _F, _A, _IPid}, From, State) ->
     handle_invokation(Inv, From, State);
 
-replaying(verify,
-          _From,
-          State = #state{inv_to_ref = InvTORef}) ->
+replaying(verify, _From, State = #state{inv_to_ref = InvTORef}) ->
     gen_fsm:cancel_timer(InvTORef),
     Reason = {invokations_missing, State#state.strict},
-    {stop, Reason, Reason, State}.
+    {stop, normal, Reason, State};
+
+replaying({await, H}, From, State) ->
+    {next_state, replaying, add_invokation_listener(From, H, State)};
+
+replaying(await_expectations, From, State = #state{on_finished = undefined}) ->
+    {next_state, replaying, State#state{ on_finished = From }};
+
+replaying(Event, _From, State) ->
+    {reply, {error, {bad_request, replaying, Event}}, replaying, State}.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
--spec no_expectations(Event :: term(), From :: term(),
+-spec no_expectations(Event     :: term(),
+                      From      :: term(),
                       StateData :: statedata()) ->
-                             {reply, Reply :: term(), NextState :: atom(),
-                              NewStateData :: statedata()} |
-                             {stop, Reason :: term(), Reply :: term(),
+                             {reply,
+                              Reply        :: term(),
+                              NextState    :: atom(),
                               NewStateData :: statedata()}.
-no_expectations(I = {invokation, _M, _F, _A, _IPid}, _From, State) ->
+no_expectations(I = {invokation, _M, _F, _A, _IPid}, From, State) ->
     case handle_stub_invokation(I, State#state.stub) of
         {ok, Answer} ->
             {reply, Answer, no_expectations, State};
 
         error ->
-            Reason = {unexpected_invokation, {actual, I}},
-            {stop, Reason, Reason, State}
+            Error = {unexpected_invokation, I},
+            gen_fsm:reply(From, {'$em_error', Error}),
+            set_deranged(Error, State)
     end;
 
-no_expectations(verify,
-         _From,
-         State) ->
-    {stop, normal, ok, State}.
+no_expectations(verify, _From, State) ->
+    {stop, normal, ok, State};
+
+no_expectations(await_expectations, _From, State) ->
+    {stop, normal, ok, State};
+
+no_expectations({await, H}, From, State) ->
+    {next_state, no_expectations, add_invokation_listener(From, H, State)};
+
+no_expectations(Event, _From, State) ->
+    {reply,
+     {error, {bad_request, no_expectations, Event}},
+     no_expectations,
+     State}.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+-spec deranged(Event     :: term(),
+               From      :: term(),
+               StateData :: statedata()) ->
+                      {reply,
+                       Reply        :: term(),
+                       NextState    :: atom(),
+                       NewStateData :: statedata()} |
+                      {stop,
+                       Reason       :: term(),
+                       Reply        :: term(),
+                       NewStateData :: statedata()}.
+
+deranged(verify, _From, State = #state{ error = Error }) ->
+    {stop, normal, Error, State};
+
+deranged(await_expectations, _From, State = #state{ error = Error }) ->
+    {stop, normal, Error, State};
+
+deranged({invokation, _M, _F, _A, _IPid}, _From, State) ->
+    {reply, {'$em_error', mock_deranged}, deranged, State};
+
+deranged({await, _}, _From, State) ->
+    {reply, {error, mock_deranged}, deranged, State};
+
+deranged(Event, _From, State) ->
+    {reply, {error, {bad_request, deranged, Event}}, deranged, State}.
+
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -578,18 +655,12 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%------------------------------------------------------------------------------
 -spec handle_sync_event(Event :: term(), From :: term(), StateName :: atom(),
                         StateData :: statedata()) ->
-                               {stop, normal, ok, NewStateData :: statedata()}
-                                   | {next_state, StateName :: atom(),
-                                      NewStateData :: statedata()}.
-handle_sync_event({await, H}, From, StateName, State) ->
-    {next_state, StateName, add_invokation_listener(From, H, State)};
-handle_sync_event(await_expectations, _From, no_expectations, State) ->
-    {stop, normal, ok, State};
-handle_sync_event(await_expectations, From, StateName,
-                  State =  #state{on_finished = undefined}) ->
-    {next_state, StateName, State#state{on_finished = From}};
-handle_sync_event(_Evt, _From, _StateName, State) ->
-    {stop, normal, ok, State}.
+                               {reply,
+                                Reply     :: term(),
+                                StateName :: atom(),
+                                StateData :: statedata()}.
+handle_sync_event(_Evt, _From, StateName, State) ->
+    {reply, {error, bad_request}, StateName, State}.
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -624,7 +695,7 @@ invoke(M, Mod, Fun, Args) ->
     Rv = case gen_fsm:sync_send_event(M, {invokation, Mod, Fun, Args, self()}) of
              {return, Value} ->
                  Value;
-             { '$em_error' , WTF} ->
+             {'$em_error' , WTF} ->
                  (catch io:format(" *ERROR* ->  ~p~nAT: ~p~n~n",[WTF, Trace])),
                  exit({mock_error, WTF});
              {function, F} ->
@@ -765,11 +836,9 @@ check_args(Args, ArgSpecs, InvokationPid) ->
                                     Args,
                                     ArgSpecs)]
     of
-        _ ->
-            true
+        _ -> true
     catch
-        _:E ->
-            E
+        E -> E
     end.
 
 %%------------------------------------------------------------------------------
@@ -814,7 +883,7 @@ get_cover_compiled_binary(Mod) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-add_invokation_listener(From, Ref, State = #state{strict=Strict,
+add_invokation_listener(From, Ref, State = #state{strict     = Strict,
                                                   strict_log = StrictSucc}) ->
     %% if the invokation does not exist, check the strict_history
     case lists:keyfind(Ref, #expectation.id, Strict) of
@@ -871,8 +940,7 @@ handle_invokation(Inv, From, St0) ->
         find_matching_expectation(
           Inv,
           [],
-          get_next_expectations(St1)
-         )
+          get_next_expectations(St1))
     of
         {ok, E} ->
             answer_invokation(Inv, E, From),
@@ -881,8 +949,9 @@ handle_invokation(Inv, From, St0) ->
                 E,
                 log_invokation(Inv, E, St1)));
 
-        Error ->
-            {stop, Error, Error, St1}
+        {error, Error} ->
+            gen_fsm:reply(From, {'$em_error', Error}),
+            set_deranged(Error, St1)
     end.
 
 %% ----------------------------------------------------------------------
@@ -1007,3 +1076,20 @@ start_invokation_timer(St) ->
     NextTimer = gen_fsm:start_timer(?INVOKATION_TIMEOUT,
                                     invokation_timeout),
     St#state{inv_to_ref = NextTimer}.
+
+
+%% ----------------------------------------------------------------------
+
+-spec set_deranged(term(), #state{}) ->
+                       {next_state, deranged, #state{}}.
+
+set_deranged(What, State = #state{ error  = no_error,
+                                   strict = Strict}) ->
+    [gen_fsm:reply(L, {error, mock_deranged}) ||
+        #expectation{ listeners = Ls } <- Strict,
+        L <- Ls],
+
+    {next_state,
+     deranged,
+     cancel_invokation_timer(
+       State#state{ error = What })}.
