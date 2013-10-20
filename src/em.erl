@@ -84,7 +84,8 @@
          verify/1,
          any/0,
          zelf/0,
-	 nothing/2]).
+         nothing/2,
+		 call_log/1]).
 
 %% gen_fsm callbacks ---
 -export([programming/3,
@@ -344,6 +345,21 @@ any() ->
 zelf() ->
     '$$em zelf$$'.
 
+%%------------------------------------------------------------------------------
+%% @doc
+%% retrieve a list of functions since the creation of the module.
+%% <p>The log will track the calls regardless whether they are done for a strict
+%% or stub function. In case the answers are not evaluated, as an function used 
+%% here may have side effects and depend on the process in which it is evaluated.
+%% </p>
+%% @end
+%%------------------------------------------------------------------------------
+-spec call_log(M :: term()) ->  [{Mod :: atom(),
+								  Func :: atom(),
+								  Args :: [term()],
+								  Answer :: term()}].
+call_log(M) -> gen_fsm:sync_send_all_state_event(M, get_call_log).
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% internal state
 %%
@@ -364,6 +380,10 @@ zelf() ->
                           IPid :: pid(),
                           Args :: [term()]}],
           stub  :: [#expectation{}],
+		  call_log :: [{Mod :: atom(),
+						Func :: atom(),
+						Args :: [term()],
+						Answer :: term()}],
 	  blacklist :: [atom()],
           mocked_modules :: [{atom(), {just, term()}|nothing}],
           await_invokations_reply :: nothing | {just, term()}
@@ -392,6 +412,7 @@ init([TestProc]) ->
         strict = [],
         strict_log = [],
         stub = [],
+		call_log =[],
         blacklist = [],
         mocked_modules = [],
         await_invokations_reply = nothing}}.
@@ -470,7 +491,8 @@ replaying(I = {invokation, Mod, Fun, Args, IPid},
                          a      = EArgs,
                          answer = Answer,
                          listeners = Listeners}
-                      |Rest]})
+                      |Rest],
+			call_log = CallLog})
   when length(EArgs) == length(Args) ->
     case check_args(Args, EArgs, IPid) of
         true ->
@@ -487,7 +509,8 @@ replaying(I = {invokation, Mod, Fun, Args, IPid},
                      State#state{strict=Rest,
                                  strict_log =
                                      [{strict_log, ERef, IPid, Args}
-                                      | State#state.strict_log]}};
+                                      | State#state.strict_log],
+								 call_log = [{Mod,Fun,Args,Answer}|CallLog]}};
                true ->
                     {just, AIR} = AwInvRepl,
                     gen_fsm:reply(AIR, ok),
@@ -502,13 +525,15 @@ replaying(I = {invokation, Mod, Fun, Args, IPid},
             {stop, Reason, Reason, State}
     end;
 
-replaying(I = {invokation, _M, _F, _A, _IPid},
+replaying(I = {invokation, M, F, A, _IPid},
           _From,
           State = #state{
-	    strict = [E|_]}) ->
+	    strict = [E|_],
+		call_log = CallLog}) ->
     case handle_stub_invokation(I, State#state.stub) of
 	{ok, Answer} ->
-	    {reply, Answer, replaying, State};
+	    {reply, Answer, replaying, 
+		 State#state{call_log = [{M, F, A, Answer}|CallLog]}};
 
 	error ->
 	    Reason = {unexpected_invokation, {actual, I}, {expected, E}},
@@ -528,10 +553,11 @@ replaying(verify, _From, State) ->
                               NewStateData :: statedata()} |
                              {stop, Reason :: term(), Reply :: term(),
                               NewStateData :: statedata()}.
-no_expectations(I = {invokation, _M, _F, _A, _IPid}, _From, State) ->
+no_expectations(I = {invokation, M, F, A, _IPid}, _From, State) ->
     case handle_stub_invokation(I, State#state.stub) of
         {ok, Answer} ->
-            {reply, Answer, no_expectations, State};
+            {reply, Answer, no_expectations, 
+			 State#state{call_log = [{M, F, A, Answer}| State#state.call_log]}};
 
         error ->
             Reason = {unexpected_invokation, {actual, I}},
@@ -574,6 +600,8 @@ handle_sync_event(await_expectations, _From, no_expectations, State) ->
 handle_sync_event(await_expectations, From, StateName,
                   State =  #state{await_invokations_reply = nothing}) ->
     {next_state, StateName, State#state{await_invokations_reply = {just, From}}};
+handle_sync_event(get_call_log, _From, StateName, State) ->
+	{reply, lists:reverse(State#state.call_log), StateName, State};
 handle_sync_event(_Evt, _From, _StateName, State) ->
     {stop, normal, ok, State}.
 
