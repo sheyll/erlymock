@@ -1,6 +1,6 @@
 %%%-----------------------------------------------------------------------------
 %%% @author Sven Heyll <sven.heyll@lindenbaum.eu>
-%%% @copyright (C) 2011, 2012 Sven Heyll
+%%% @copyright (C) 2011, 2012, 2013 Sven Heyll
 %%% @doc
 %%% The module name 'em' stands for 'Erly Mock'.
 %%%
@@ -96,7 +96,7 @@
    %      await_groups/1,
          await_expectations/1,
          verify/1,
-		 call_log/1]).
+         call_log/1]).
 
 %% gen_fsm callbacks ---
 -export([programming/3,
