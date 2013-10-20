@@ -6,25 +6,22 @@
 %%%
 %%% <p>This mocking library works similar to Easymock.</p>
 %%%
-%%% <p>After a mock process is started by {@link new/0} it can be
-%%% programmed to expect function calls and to react to them in two
-%%% ways: <ul><li>by returning a value</li><li>by executing an arbitrary
-%%% function</li></ul>
-%%% This is done with {@link strict/4}, {@link strict/5}, {@link stub/4}, {@link stub/5}
-%%% </p>
+%%% <p>After a mock process is started by {@link new/0} it can be programmed to
+%%% expect function calls and to react to them in two ways: <ul><li>by returning
+%%% a value</li><li>by executing an arbitrary function</li></ul> This is done
+%%% with {@link strict/4}, {@link strict/5}, {@link stub/4}, {@link stub/5} </p>
 %%%
 %%% <p>Before the code under test is executed, the mock must be told
 %%% that the programming phase is over by {@link replay/1}.</p>
 %%%
-%%% <p>In the next phase the code under test is run, and might or
-%%% might not call the functions mocked.
-%%% The mock process checks that all functions programmed with
-%%% {@link strict/4}, {@link strict/5} are called in the
-%%% correct order, with the expected arguments and reacts in the way
-%%% defined during the programming phase. If a mocked function is called
-%%% although another function was expected, or if an expected function
-%%% was called with different arguments, the mock process dies and
-%%% prints a comprehensive error message before failing the test.</p>
+%%% <p>In the next phase the code under test is run, and might or might not call
+%%% the functions mocked.  The mock process checks that all functions programmed
+%%% with {@link strict/4}, {@link strict/5} are called in the correct order,
+%%% with the expected arguments and reacts in the way defined during the
+%%% programming phase. If a mocked function is called although another function
+%%% was expected, or if an expected function was called with different
+%%% arguments, the mock process dies and prints a comprehensive error message
+%%% before failing the test.</p>
 %%%
 %%% <p>To support mock invokations from multiple processes the strictness
 %%% requirement can be reduced to calls belonging to the same group. {@link
@@ -41,28 +38,29 @@
 %%%
 %%% <p>An alternative to {@link await_expectations/1} is {@link verify/1}. It is
 %%% called to check for missing invocations at the end of the programming phase,
-%%% if any expected invocations are missing at verify will throw an exception.</p>
+%%% if any expected invocations are missing at verify will throw an
+%%% exception.</p>
 %%%
 %%% <p>When the mock process exits it tries hard to remove all modules, that
 %%% were dynamically created and loaded during the programming phase.</p>
 %%%
-%%% NOTE: This library works by purging the modules mocked and replacing
-%%% them with dynamically created and compiled code, so be careful what
-%%% you mock, i.e. it brings chaos to mock modules from kernel. This also
-%%% implies, that tests that mock the same modules must be run sequentially.
+%%% NOTE: This library works by purging the modules mocked and replacing them
+%%% with dynamically created and compiled code, so be careful what you mock,
+%%% i.e. it brings chaos to mock modules from kernel. This also implies, that
+%%% tests that mock the same modules must be run sequentially.
 %%%
 %%% Apart from that, it is very advisable to <b>only mock owned modules</b>
 %%% anyway.
 %%%
 %%% @end
 %%%-----------------------------------------------------------------------------
-%%% Copyright (c) 2011,2012 Sven Heyll
+%%% Copyright (c) 2011,2012,2013 Sven Heyll
 %%%
 %%% Permission is hereby granted, free of charge, to any person obtaining a copy
-%%% of this software and associated documentation files (the "Software"), to deal
-%%% in the Software without restriction, including without limitation the rights
-%%% to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-%%% copies of the Software, and to permit persons to whom the Software is
+%%% of this software and associated documentation files (the "Software"), to
+%%% deal in the Software without restriction, including without limitation the
+%%% rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+%%% sell copies of the Software, and to permit persons to whom the Software is
 %%% furnished to do so, subject to the following conditions:
 %%%
 %%% The above copyright notice and this permission notice shall be included in
@@ -72,9 +70,9 @@
 %%% IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 %%% FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 %%% AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-%%% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-%%% OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-%%% THE SOFTWARE.
+%%% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+%%% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+%%% IN THE SOFTWARE.
 %%%
 %%%-----------------------------------------------------------------------------
 
@@ -97,7 +95,8 @@
          await/2,
    %      await_groups/1,
          await_expectations/1,
-         verify/1]).
+         verify/1,
+		 call_log/1]).
 
 %% gen_fsm callbacks ---
 -export([programming/3,
@@ -346,6 +345,21 @@ await({group, M, {root, _}}, Handle) ->
 
 %%------------------------------------------------------------------------------
 %% @doc
+%% Retrieve a list of successfully mocked invokations, i.e. alls call that were
+%% accepted by the `em' processin in the `replay' phase. Noth strict and stub
+%% invokations are recorded.  NOTE: The Answer might as well be a function,
+%% depending on the `return' argument passed to `strict' or `stub'.
+%% @end
+%%------------------------------------------------------------------------------
+-spec call_log(group()) ->  [{Mod :: atom(),
+                              Func :: atom(),
+                              Args :: [term()],
+                              Answer :: term()}].
+call_log({group, M, {root, _}}) ->
+    gen_fsm:sync_send_all_state_event(M, get_call_log).
+
+%%------------------------------------------------------------------------------
+%% @doc
 %% Wait until all invokations defined during the programming phase were made.
 %% After this functions returns, the mock can be expected to exit and clean up
 %% all modules installed.
@@ -438,6 +452,10 @@ zelf() ->
          strict           :: [#expectation{}],
          strict_log       :: [#strict_log{}],
          stub             :: [#expectation{}],
+         call_log         :: [{Mod :: atom(),
+					          Func :: atom(),
+						      Args :: [term()],
+						      Answer :: term()}],
          blacklist        :: [atom()],
          mocked_modules   :: [{atom(), {just, term()}|nothing}],
          on_finished      :: term(), % GenFsmFrom
@@ -465,6 +483,7 @@ init([TestProc]) ->
         strict = [],
         strict_log = [],
         stub = [],
+		call_log =[],
         blacklist = [],
         mocked_modules = []}}.
 
@@ -576,10 +595,13 @@ replaying(Event, _From, State) ->
                               Reply        :: term(),
                               NextState    :: atom(),
                               NewStateData :: statedata()}.
-no_expectations(I = {invokation, _M, _F, _A, _IPid}, From, State) ->
+no_expectations(I = {invokation, M, F, A, _IPid},
+                From,
+                State = #state{call_log = CallLog}) ->
     case handle_stub_invokation(I, State#state.stub) of
         {ok, Answer} ->
-            {reply, Answer, no_expectations, State};
+            {reply, Answer, no_expectations,
+             State#state{call_log = [{M, F, A, Answer}|CallLog]}};
 
         error ->
             Error = {unexpected_invokation, I},
@@ -659,6 +681,8 @@ code_change(_OldVsn, StateName, State, _Extra) ->
                                 Reply     :: term(),
                                 StateName :: atom(),
                                 StateData :: statedata()}.
+handle_sync_event(get_call_log, _From, StateName, State) ->
+    {reply, lists:reverse(State#state.call_log), StateName, State};
 handle_sync_event(_Evt, _From, StateName, State) ->
     {reply, {error, bad_request}, StateName, State}.
 
@@ -942,7 +966,7 @@ handle_invokation(Inv, From, St0) ->
           [],
           get_next_expectations(St1))
     of
-        {ok, E} ->
+        {ok, E = #expectation{}} ->
             answer_invokation(Inv, E, From),
             stop_or_continue_replay(
               remove_expectation(
@@ -1035,20 +1059,22 @@ remove_expectation(#expectation{id = EId},
 
 %% ----------------------------------------------------------------------
 
-log_invokation({invokation, _Mod, _Fun, Args, IPid},
+log_invokation({invokation, Mod, Fun, Args, IPid},
                #expectation {
                  id = EId,
-                 g = GroupTag
+                 g = GroupTag,
+                 answer = Answer
                 },
-               St = #state{ strict_log = Log }) ->
+               St = #state{ strict_log = Log,
+                            call_log   = CallLog }) ->
     St#state {
       strict_log = [#strict_log {
                       eref = EId,
                        grpt = GroupTag,
                        ipid = IPid,
                        args = Args
-                      } | Log]
-     }.
+                      } | Log],
+      call_log = [{Mod, Fun, Args, Answer} | CallLog]}.
 
 %% ----------------------------------------------------------------------
 

@@ -509,3 +509,27 @@ mock_deranged_await_expectations_test() ->
                    mod, f2, [right], _},
                   _},
                  em:await_expectations(M)).
+
+
+generate_call_log_test() ->
+	?debugHere,
+	process_flag(trap_exit, true),
+	M = em:new(),
+	em:strict(M, some_mod, a_fun, [fun is_atom/1]),
+	em:strict(M, some_mod, ret_fun, [fun is_atom/1], {function, fun(_A) -> yes end}),
+	em:strict(M, some_mod, a_fun, [fun is_atom/1]),
+	em:stub(M, some_mod, stub_fun, [a, b]),
+	em:replay(M),
+	some_mod:stub_fun(a,b),
+	some_mod:a_fun(this_is_an_atom),
+	some_mod:ret_fun(not_me),
+	some_mod:a_fun(this_is_one_too),
+	some_mod:stub_fun(a,b),
+	
+	?assertMatch([{some_mod, stub_fun, [a,b],{return, ok}},
+				  {some_mod, a_fun, [this_is_an_atom],{return, ok}},
+				  {some_mod, ret_fun, [not_me],{function, FuncTerm}},
+				  {some_mod, a_fun, [this_is_one_too],{return, ok}},
+				  {some_mod, stub_fun, [a,b],{return, ok}}] when is_function(FuncTerm), 
+				 em:call_log(M)),
+		em:verify(M). 
