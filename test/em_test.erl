@@ -32,7 +32,7 @@ invokation_timout_test() ->
     Pid = spawn_link(fun() ->
                              M = em:new(),
                              em:strict(M, some_mod, some_fun, [a]),
-                             em:replay(M),
+                             em:replay(M, 1),
                              receive never_to_receive -> ok end
                      end),
     process_flag(trap_exit, true),

@@ -92,6 +92,7 @@
          stub/4,
          stub/5,
          replay/1,
+         replay/2,
          await/2,
    %      await_groups/1,
          await_expectations/1,
@@ -114,11 +115,7 @@
 %% !!!NEVER CALL THIS FUNCTION!!! ---
 -export([invoke/4]).
 
--export_type([group/0, group_tag/0]).
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% next invokation must happen in this time, orelse ... BOOM!!!111oneoneeleventy
--define(INVOKATION_TIMEOUT, 4020).
+-export_type([group/0, group_tag/0, timeout_millis/0]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% important types
@@ -144,9 +141,14 @@
 
 %%------------------------------------------------------------------------------
 %% A group is a pair with a tag for a group and a mock process.
-%% ------------------------------------------------------------------------------
+%%------------------------------------------------------------------------------
 -type group_tag() :: {term(), reference()}.
 -type group() :: {group, pid(), group_tag()}.
+
+%%------------------------------------------------------------------------------
+%% Timout for {@link replay/2}
+%%------------------------------------------------------------------------------
+-type timeout_millis() :: non_neg_integer() | infinity.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% API
@@ -322,8 +324,19 @@ lock({group, M, {root, _}}, Mods) when is_pid(M), is_list(Mods) ->
 %% @end
 %%------------------------------------------------------------------------------
 -spec replay(group()) -> ok.
-replay({group, M, {root, _}}) ->
-    ok = gen_fsm:sync_send_event(M, replay).
+replay(G) ->
+    replay(G, infinity).
+
+%%------------------------------------------------------------------------------
+%% @doc
+%% Finishes the programming phase and switches to the replay phase, expecting
+%% that invokations are recorded at least once every `InvokationTimeout' millis.
+%% @see replay/1
+%% @end
+%%------------------------------------------------------------------------------
+-spec replay(group(), timeout_millis()) -> ok.
+replay({group, M, {root, _}}, InvokationTimeout) ->
+    ok = gen_fsm:sync_send_event(M, {replay, InvokationTimeout}).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -448,7 +461,8 @@ zelf() ->
 
 -record(state,
         {test_proc        :: pid(),
-         inv_to_ref       :: reference(),
+         inv_to           :: timeout_millis(),
+         inv_to_ref       :: reference() | no_inv_to_ref,
          strict           :: [#expectation{}],
          strict_log       :: [#strict_log{}],
          stub             :: [#expectation{}],
@@ -483,7 +497,7 @@ init([TestProc]) ->
         strict = [],
         strict_log = [],
         stub = [],
-		call_log =[],
+        call_log =[],
         blacklist = [],
         mocked_modules = []}}.
 
@@ -529,21 +543,18 @@ programming({nothing, Mod},
      State#state{
        blacklist = [Mod | BL]}};
 
-programming(replay,
+programming({replay, InvTo},
             _From,
-            State = #state{strict = Strict}) ->
-    MMs = install_mock_modules(State),
-    InvTORef = gen_fsm:start_timer(?INVOKATION_TIMEOUT, invokation_timeout),
-    {reply,
-     ok,
-     case Strict of
-         [] -> no_expectations;
-         _ -> replaying
-     end,
-     State#state{
-       inv_to_ref = InvTORef,
-       strict = lists:reverse(Strict),
-       mocked_modules = MMs}};
+            State) ->
+    NextState = load_mock_modules(
+                  prepare_strict_invocations(
+                    start_invokation_timer(
+                      setup_invokation_timeout(InvTo, State)))),
+    NextStateName = case NextState#state.strict of
+                        [] -> no_expectations;
+                        _ -> replaying
+                    end,
+    {reply, ok, NextStateName, NextState};
 
 programming(Event, _From, State) ->
     {reply, {error, {bad_request, programming, Event}}, programming, State}.
@@ -556,8 +567,8 @@ programming(Event, _From, State) ->
 -spec replaying(Event :: term(), StateData :: statedata()) ->
                        {stop, Reason :: term(), NewStateData :: statedata()}.
 replaying({timeout, Ref, invokation_timeout},
-          State = #state{inv_to_ref = Ref,
-                         strict = Expectations}) ->
+          State = #state{ inv_to_ref = Ref,
+                          strict     = Expectations}) ->
     {stop, {invokation_timeout, {missing_invokations, Expectations}}, State}.
 
 -spec replaying(Event :: term(), From :: term(), StateData :: statedata()) ->
@@ -751,19 +762,21 @@ unload_mock_modules(#state{mocked_modules = MMs}) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-install_mock_modules(#state{strict = ExpectationsStrict,
-                            stub = ExpectationsStub,
-			    blacklist = BlackList}) ->
+load_mock_modules(State = #state{ strict    = ExpectationsStrict,
+                                  stub      = ExpectationsStub,
+                                  blacklist = BlackList }) ->
     Expectations = ExpectationsStub ++ ExpectationsStrict,
-    ModulesToMock = lists:usort([M || #expectation{m = M} <- Expectations] ++ BlackList),
+    ExpectationModules = [M || #expectation{m = M} <- Expectations],
+    ModulesToMock = lists:usort(ExpectationModules ++ BlackList),
     em_module_locker:lock(erlang:self(), ModulesToMock),
     [check_func(Ex) || Ex <- Expectations],
-    [install_mock_module(M, Expectations) || M <- ModulesToMock].
+    MockedModules = [load_mock_module(M, Expectations) || M <- ModulesToMock],
+    State#state{ mocked_modules = MockedModules }.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-install_mock_module(Mod, Expectations) ->
+load_mock_module(Mod, Expectations) ->
     MaybeBin = get_cover_compiled_binary(Mod),
     ModHeaderSyn = [erl_syntax:attribute(erl_syntax:atom(module),
 					 [erl_syntax:atom(Mod)]),
@@ -773,8 +786,9 @@ install_mock_module(Mod, Expectations) ->
                                          [erl_syntax:list(
                                             [erl_syntax:atom(export_all)])])],
     Funs = lists:usort(
-             [{F, length(A)} || #expectation{m = M, f = F, a = A} <- Expectations,
-                                M == Mod]),
+             [{F, length(A)} ||
+                 #expectation{ m = M, f = F, a = A } <- Expectations,
+                 M == Mod]),
     FunFormsSyn = [mock_fun_syn(Mod, F, A) || {F, A} <- Funs],
 
     {ok, Mod, Code} =
@@ -823,6 +837,12 @@ body_syn(Mod, FunSyn, ArgsSyn) ->
         erl_syntax:atom(Mod),
         FunSyn,
         erl_syntax:list(ArgsSyn)])].
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+prepare_strict_invocations(S = #state{ strict = Strict }) ->
+    S#state{ strict = lists:reverse(Strict) }.
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -978,20 +998,26 @@ handle_invokation(Inv, From, St0) ->
             set_deranged(Error, St1)
     end.
 
-%% ----------------------------------------------------------------------
 
-cancel_invokation_timer(St = #state{inv_to_ref = undefined}) ->
-    St;
-
-cancel_invokation_timer(St = #state{inv_to_ref = TimerRef}) ->
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+cancel_invokation_timer(St = #state{inv_to_ref = TimerRef})
+  when is_reference(TimerRef) ->
     gen_fsm:cancel_timer(TimerRef),
-    St#state{inv_to_ref = undefined}.
+    St#state{inv_to_ref = undefined};
 
-%% ----------------------------------------------------------------------
+cancel_invokation_timer(St) -> St.
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 get_next_expectations(#state{strict = Es, stub = StubEs}) ->
     heads_by_group_tag(Es) ++ StubEs.
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 heads_by_group_tag(Es) ->
     lists:foldl(fun
                    (#expectation{g = EG}, Acc = [#expectation{g = AG}|_])
@@ -1004,8 +1030,9 @@ heads_by_group_tag(Es) ->
                 [],
                 lists:keysort(#expectation.g, Es)).
 
-%% ----------------------------------------------------------------------
-
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 find_matching_expectation(I, Hints, []) ->
     {error, {unexpected_invokation, I, Hints}};
 
@@ -1036,8 +1063,9 @@ find_matching_expectation(I = {invokation, Mod, Fun, Args, IPid},
             find_matching_expectation(I, [Hint|Hints], RestEs)
     end.
 
-%% ----------------------------------------------------------------------
-
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 answer_invokation({invokation, _Mod, _Fun, Args, IPid},
                   #expectation{answer    = Answer,
                                listeners = Listeners},
@@ -1045,8 +1073,9 @@ answer_invokation({invokation, _Mod, _Fun, Args, IPid},
     gen_fsm:reply(From, Answer),
     [gen_fsm:reply(Listener, {success, IPid, Args}) || Listener <- Listeners].
 
-%% ----------------------------------------------------------------------
-
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 remove_expectation(#expectation{id = EId},
                    St = #state{strict = Stricts}) ->
 
@@ -1057,8 +1086,9 @@ remove_expectation(#expectation{id = EId},
                  Stricts)
      }.
 
-%% ----------------------------------------------------------------------
-
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 log_invokation({invokation, Mod, Fun, Args, IPid},
                #expectation {
                  id = EId,
@@ -1076,12 +1106,13 @@ log_invokation({invokation, Mod, Fun, Args, IPid},
                       } | Log],
       call_log = [{Mod, Fun, Args, Answer} | CallLog]}.
 
-%% ----------------------------------------------------------------------
-
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 stop_or_continue_replay(St = #state{
-                          strict = Expectations,
-                          on_finished = OnFinished
-                         }) ->
+                                strict      = Expectations,
+                                on_finished = OnFinished
+                               }) ->
     case {Expectations, OnFinished} of
 
         {[], undefined} ->
@@ -1096,16 +1127,26 @@ stop_or_continue_replay(St = #state{
             {stop, normal, St}
     end.
 
-%% ----------------------------------------------------------------------
-%% TODO use this function more often
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+setup_invokation_timeout(InvTimeout, S = #state{}) ->
+    S#state{ inv_to     = InvTimeout,
+             inv_to_ref = no_inv_to_ref }.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+start_invokation_timer(St = #state{ inv_to = InvTo }) when is_integer(InvTo) ->
+    NextTimer = gen_fsm:start_timer(InvTo, invokation_timeout),
+    St#state{ inv_to_ref = NextTimer };
+
 start_invokation_timer(St) ->
-    NextTimer = gen_fsm:start_timer(?INVOKATION_TIMEOUT,
-                                    invokation_timeout),
-    St#state{inv_to_ref = NextTimer}.
+    St.
 
-
-%% ----------------------------------------------------------------------
-
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 -spec set_deranged(term(), #state{}) ->
                        {next_state, deranged, #state{}}.
 
