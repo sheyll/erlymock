@@ -98,7 +98,7 @@ handle_cast(perform_locking,
     Mocks_To_Reply = [M || M = {_, Mods, _} <- State#state.waiting_mocks,
                            (Mods -- (State#state.locked_modules)) == Mods],
     NewState = lists:foldr(fun(M = {MockPid, Mods, From}, StateAcc) ->
-                                   {ok, TRef} = timer:kill_after(?MAX_LOCK_TIME, MockPid),
+                                   {ok, TRef} = timer:exit_after(?MAX_LOCK_TIME, MockPid, {module_hogging, Mods}),
                                    gen_server:reply(From, ok),
                                    StateAcc#state{
                                      timers =
