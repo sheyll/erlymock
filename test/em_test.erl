@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author Sven Heyll <sven.heyll@lindenbaum.eu>
+%%% @author Sven Heyll <sven.heyll@gmail.com>
 %%% @copyright (C) 2011, Sven Heyll
 %%%-------------------------------------------------------------------
 -module(em_test).
@@ -525,11 +525,11 @@ generate_call_log_test() ->
 	some_mod:ret_fun(not_me),
 	some_mod:a_fun(this_is_one_too),
 	some_mod:stub_fun(a,b),
-	
+
 	?assertMatch([{some_mod, stub_fun, [a,b],{return, ok}},
 				  {some_mod, a_fun, [this_is_an_atom],{return, ok}},
 				  {some_mod, ret_fun, [not_me],{function, FuncTerm}},
 				  {some_mod, a_fun, [this_is_one_too],{return, ok}},
-				  {some_mod, stub_fun, [a,b],{return, ok}}] when is_function(FuncTerm), 
+				  {some_mod, stub_fun, [a,b],{return, ok}}] when is_function(FuncTerm),
 				 em:call_log(M)),
-		em:verify(M). 
+		em:verify(M).

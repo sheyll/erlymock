@@ -1,7 +1,7 @@
 %%%=============================================================================
 %%%
-%%% @author Sven Heyll <sven.heyll@lindenbaum.eu>
-%%% @copyright (C) 2011, Sven Heyll
+%%% @author Sven Heyll <sven.heyll@gmail.com>
+%%% @copyright (C) 2011, 2014 Sven Heyll
 %%%
 %%% @doc
 %%% Internal server that provides a locking mechanism between em processes so that

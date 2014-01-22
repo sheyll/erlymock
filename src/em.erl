@@ -1,6 +1,6 @@
 %%%-----------------------------------------------------------------------------
-%%% @author Sven Heyll <sven.heyll@lindenbaum.eu>
-%%% @copyright (C) 2011, 2012, 2013 Sven Heyll
+%%% @author Sven Heyll <sven.heyll@gmail.com>
+%%% @copyright (C) 2011, 2012, 2013, 2014 Sven Heyll
 %%% @doc
 %%% The module name 'em' stands for 'Erly Mock'.
 %%%
