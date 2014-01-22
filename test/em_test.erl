@@ -229,14 +229,12 @@ error_module_already_locked_test() ->
     xxx:y(),
     em:verify(M1).
 
-
-%% verify_missing_invokation_test() ->
-%%     process_flag(trap_exit, true),
-%%     M = em:new(),
-%%     em:strict(M, xxx,y,[]),
-%%     em:replay(M),
-%%     em:verify(M).
-
+verify_missing_invokation_test() ->
+    process_flag(trap_exit, true),
+    M = em:new(),
+    em:strict(M, xxx,y,[]),
+    em:replay(M),
+    ?assertError({badmatch, {invokations_missing, _}}, em:verify(M)).
 
 generate_call_log_test() ->
 	?debugHere,
@@ -252,11 +250,11 @@ generate_call_log_test() ->
 	some_mod:ret_fun(not_me),
 	some_mod:a_fun(this_is_one_too),
 	some_mod:stub_fun(a,b),
-	
+
 	?assertMatch([{some_mod, stub_fun, [a,b],{return, ok}},
 				  {some_mod, a_fun, [this_is_an_atom],{return, ok}},
 				  {some_mod, ret_fun, [not_me],{function, FuncTerm}},
 				  {some_mod, a_fun, [this_is_one_too],{return, ok}},
-				  {some_mod, stub_fun, [a,b],{return, ok}}] when is_function(FuncTerm), 
+				  {some_mod, stub_fun, [a,b],{return, ok}}] when is_function(FuncTerm),
 				 em:call_log(M)),
-		em:verify(M). 
+		em:verify(M).
