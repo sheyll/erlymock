@@ -20,6 +20,61 @@
 %%%=============================================================================
 %%% TESTS
 %%%=============================================================================
+
+two_waiting_for_same_modules_test() ->
+    process_flag(trap_exit, true),
+    case whereis(em_module_locker) of
+        undefined ->
+            ok;
+        MLP ->
+            link(MLP),
+            exit(MLP, shutdown),
+            receive
+                {'EXIT', MLP, _} ->
+                    ok
+            end
+    end,
+    Test = self(),
+    P1 = spawn(fun() ->
+                       em_module_locker:lock(self(), [m]),
+                       Test ! go_on,
+                       receive A -> A end
+               end),
+    receive go_on -> ok end,
+    P2 = spawn(fun() ->
+                       Test ! try_lock_p2,
+                       em_module_locker:lock(self(), [m]),
+                       Test ! locked_p2,
+                       receive A -> A end
+               end),
+    P3 = spawn(fun() ->
+                       Test ! try_lock_p3,
+                       em_module_locker:lock(self(), [m]),
+                       Test ! locked_p3,
+                       receive A -> A end
+               end),
+    receive try_lock_p2 -> ok end,
+    receive try_lock_p3 -> ok end,
+    P1 ! die,
+    receive
+        locked_p2 ->
+            receive
+                locked_p3 ->
+                    throw({"two modules locked the same resources"})
+            after 1000 ->
+                    P2 ! die,
+                    P3 ! die
+            end;
+        locked_p3 ->
+            receive
+                locked_p2 ->
+                    throw({"two modules locked the same resources"})
+            after 1000 ->
+                    P2 ! die,
+                    P3 ! die
+            end
+    end.
+
 remove_lock_after_some_time_test() ->
     process_flag(trap_exit, true),
     case whereis(em_module_locker) of
@@ -110,60 +165,6 @@ simple_lock_and_unlock_test() ->
             throw(fail3)
     after 10 ->
         ok
-    end.
-
-two_waiting_for_same_modules_test() ->
-    process_flag(trap_exit, true),
-    case whereis(em_module_locker) of
-        undefined ->
-            ok;
-        MLP ->
-            link(MLP),
-            exit(MLP, shutdown),
-            receive
-                {'EXIT', MLP, _} ->
-                    ok
-            end
-    end,
-    Test = self(),
-    P1 = spawn(fun() ->
-                       em_module_locker:lock(self(), [m]),
-                       Test ! go_on,
-                       receive A -> A end
-               end),
-    receive go_on -> ok end,
-    P2 = spawn(fun() ->
-                       Test ! try_lock_p2,
-                       em_module_locker:lock(self(), [m]),
-                       Test ! locked_p2,
-                       receive A -> A end
-               end),
-    P3 = spawn(fun() ->
-                       Test ! try_lock_p3,
-                       em_module_locker:lock(self(), [m]),
-                       Test ! locked_p3,
-                       receive A -> A end
-               end),
-    receive try_lock_p2 -> ok end,
-    receive try_lock_p3 -> ok end,
-    P1 ! die,
-    receive
-        locked_p2 ->
-            receive
-                locked_p3 ->
-                    throw({"two modules locked the same resources"})
-            after 1000 ->
-                    P2 ! die,
-                    P3 ! die
-            end;
-        locked_p3 ->
-            receive
-                locked_p2 ->
-                    throw({"two modules locked the same resources"})
-            after 1000 ->
-                    P2 ! die,
-                    P3 ! die
-            end
     end.
 
 %%%=============================================================================

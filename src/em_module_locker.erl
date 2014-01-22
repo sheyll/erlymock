@@ -95,23 +95,26 @@ handle_call(Request, _From, State) ->
                          {stop, term(), term()}.
 handle_cast(perform_locking,
             State) ->
-    Mocks_To_Reply = [M || M = {_, Mods, _} <- State#state.waiting_mocks,
-                           (Mods -- (State#state.locked_modules)) == Mods],
     NewState = lists:foldr(fun(M = {MockPid, Mods, From}, StateAcc) ->
-                                   {ok, TRef} = timer:exit_after(?MAX_LOCK_TIME, MockPid, {module_hogging, Mods}),
-                                   gen_server:reply(From, ok),
-                                   StateAcc#state{
-                                     timers =
-                                         dict:store(MockPid, TRef, StateAcc#state.timers),
-                                     locked_modules =
-                                         StateAcc#state.locked_modules ++ Mods,
-                                     waiting_mocks =
-                                         StateAcc#state.waiting_mocks -- [M],
-                                     locking_mocks =
-                                         [M | StateAcc#state.locking_mocks]}
+                                   AllModulesUnlocked = (Mods -- (StateAcc#state.locked_modules)) == Mods,
+                                   if AllModulesUnlocked ->
+                                           {ok, TRef} = timer:exit_after(?MAX_LOCK_TIME, MockPid, {module_hogging, Mods}),
+                                           gen_server:reply(From, ok),
+                                           StateAcc#state{
+                                             timers =
+                                                 dict:store(MockPid, TRef, StateAcc#state.timers),
+                                             locked_modules =
+                                                 StateAcc#state.locked_modules ++ Mods,
+                                             waiting_mocks =
+                                                 StateAcc#state.waiting_mocks -- [M],
+                                             locking_mocks =
+                                                 [M | StateAcc#state.locking_mocks]};
+                                      true ->
+                                           StateAcc
+                                   end
                            end,
                            State,
-                           Mocks_To_Reply),
+                           State#state.waiting_mocks),
     {noreply, NewState};
 
 handle_cast(Request, State) ->
