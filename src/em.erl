@@ -250,11 +250,11 @@ strict(M, Mod, Fun, Args) ->
                     reference().
 strict({group, M, Group}, Mod, Fun, Args, Answer = {return, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
-    gen_fsm:sync_send_event(M, {strict, Group, Mod, Fun, Args, Answer});
+    gen_fsm:sync_send_event(M, {strict, Group, Mod, Fun, Args, Answer}, infinity);
 
 strict({group, M, Group}, Mod, Fun, Args, Answer = {function, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
-    gen_fsm:sync_send_event(M, {strict, Group, Mod, Fun, Args, Answer}).
+    gen_fsm:sync_send_event(M, {strict, Group, Mod, Fun, Args, Answer}, infinity).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -282,11 +282,11 @@ stub(M, Mod, Fun, Args) ->
                   ok.
 stub({group, M, {root, _}}, Mod, Fun, Args, Answer = {return, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
-    ok = gen_fsm:sync_send_event(M, {stub, Mod, Fun, Args, Answer});
+    ok = gen_fsm:sync_send_event(M, {stub, Mod, Fun, Args, Answer}, infinity);
 
 stub({group, M, {root, _}}, Mod, Fun, Args, Answer = {function, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
-    ok = gen_fsm:sync_send_event(M, {stub, Mod, Fun, Args, Answer}).
+    ok = gen_fsm:sync_send_event(M, {stub, Mod, Fun, Args, Answer}, infinity).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -298,7 +298,7 @@ stub({group, M, {root, _}}, Mod, Fun, Args, Answer = {function, _})
 -spec nothing(group(), atom()) ->
 		     ok.
 nothing({group, M, {root, _}}, Mod) when is_pid(M), is_atom(Mod) ->
-   ok = gen_fsm:sync_send_event(M, {nothing, Mod}).
+   ok = gen_fsm:sync_send_event(M, {nothing, Mod}, infinity).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -336,7 +336,7 @@ replay(G) ->
 %%------------------------------------------------------------------------------
 -spec replay(group(), timeout_millis()) -> ok.
 replay({group, M, {root, _}}, InvokationTimeout) ->
-    ok = gen_fsm:sync_send_event(M, {replay, InvokationTimeout}).
+    ok = gen_fsm:sync_send_event(M, {replay, InvokationTimeout}, infinity).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -354,7 +354,7 @@ replay({group, M, {root, _}}, InvokationTimeout) ->
                     Args :: [term()]} |
                    {error, term()}.
 await({group, M, {root, _}}, Handle) ->
-    gen_fsm:sync_send_event(M, {await, Handle}, 5000).
+    gen_fsm:sync_send_event(M, {await, Handle}, infinity).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -369,7 +369,7 @@ await({group, M, {root, _}}, Handle) ->
                               Args :: [term()],
                               Answer :: term()}].
 call_log({group, M, {root, _}}) ->
-    gen_fsm:sync_send_all_state_event(M, get_call_log).
+    gen_fsm:sync_send_all_state_event(M, get_call_log, infinity).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -381,7 +381,7 @@ call_log({group, M, {root, _}}) ->
 -spec await_expectations(group()) -> ok.
 await_expectations({group, M, {root, _}}) ->
     case
-        gen_fsm:sync_send_event(M, await_expectations, 5000)
+        gen_fsm:sync_send_event(M, await_expectations, infinity)
     of
         ok ->
             ok;
@@ -727,7 +727,7 @@ handle_event(_Msg, _StateName, State) ->
 invoke(M, Mod, Fun, Args) ->
     (catch io:format("~nEM: ~w:~w ~p",[Mod,Fun, Args])),
     Trace = erlang:get_stacktrace(),
-    Rv = case gen_fsm:sync_send_event(M, {invokation, Mod, Fun, Args, self()}) of
+    Rv = case gen_fsm:sync_send_event(M, {invokation, Mod, Fun, Args, self()}, infinity) of
              {return, Value} ->
                  Value;
              {'$em_error' , WTF} ->
