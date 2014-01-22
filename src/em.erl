@@ -582,10 +582,10 @@ replaying({timeout, Ref, invokation_timeout},
 replaying(Inv = {invokation, _M, _F, _A, _IPid}, From, State) ->
     handle_invokation(Inv, From, State);
 
-replaying(verify, _From, State = #state{inv_to_ref = InvTORef}) ->
-    gen_fsm:cancel_timer(InvTORef),
+replaying(verify, _From, State) ->
     Reason = {invokations_missing, State#state.strict},
-    {stop, normal, Reason, State};
+    NewState = cancel_invokation_timer(State),
+    {stop, normal, Reason, NewState};
 
 replaying({await, H}, From, State) ->
     {next_state, replaying, add_invokation_listener(From, H, State)};
@@ -1005,7 +1005,7 @@ handle_invokation(Inv, From, St0) ->
 cancel_invokation_timer(St = #state{inv_to_ref = TimerRef})
   when is_reference(TimerRef) ->
     gen_fsm:cancel_timer(TimerRef),
-    St#state{inv_to_ref = undefined};
+    St#state{inv_to_ref = no_inv_to_ref};
 
 cancel_invokation_timer(St) -> St.
 

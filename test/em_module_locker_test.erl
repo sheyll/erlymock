@@ -69,46 +69,6 @@ two_waiting_for_same_modules_test() ->
             end
     end.
 
-remove_lock_after_some_time_test() ->
-    process_flag(trap_exit, true),
-    case whereis(em_module_locker) of
-        undefined ->
-            ok;
-        MLP ->
-            link(MLP),
-            exit(MLP, shutdown),
-            receive
-                {'EXIT', MLP, _} ->
-                    ok
-            end
-    end,
-    TestPid = spawn(fun() -> receive A -> A end end),
-    em_module_locker:lock(TestPid, [m2]),
-    receive after 4400 -> ok end,
-    TestPid2 = spawn(fun() -> receive A -> A end end),
-    em_module_locker:lock(TestPid2, [m2]),
-    TestPid2 ! die.
-
-kill_module_hogger_after_timeout_test() ->
-    process_flag(trap_exit, true),
-    case whereis(em_module_locker) of
-        undefined ->
-            ok;
-        MLP ->
-            link(MLP),
-            exit(MLP, shutdown),
-            receive
-                {'EXIT', MLP, _} ->
-                    ok
-            end
-    end,
-    {Test1, Mon1} = spawn_monitor(fun() -> receive A -> A end end),
-    em_module_locker:lock(Test1, [m1, m2]),
-    receive
-        {'DOWN', Mon1, _, _, Reason} ->
-            ?assertEqual({module_hogging, [m1, m2]}, Reason)
-    end.
-
 simple_lock_and_unlock_test() ->
     process_flag(trap_exit, true),
     case whereis(em_module_locker) of

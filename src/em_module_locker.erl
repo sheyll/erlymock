@@ -4,10 +4,10 @@
 %%% @copyright (C) 2011, 2014 Sven Heyll
 %%%
 %%% @doc
-%%% Internal server that provides a locking mechanism between em processes so that
-%%% no two mock processes mock the same modules.
-%%% A mock process locks some modules and as soon as the mock process dies, its
-%%% modules will automatically be unlocked.
+%%% Internal server that provides a locking mechanism between em processes so
+%%% that no two mock processes mock the same modules.  A mock process locks some
+%%% modules and as soon as the mock process dies, its modules will automatically
+%%% be unlocked.
 %%% @end
 %%%=============================================================================
 
@@ -30,17 +30,10 @@
 
 -record(state,
         {locked_modules = [] :: [module()],
-         timers         = dict:new(),
          locking_mocks  = [] :: [{pid(), [module()], term()}],
          waiting_mocks  = [] :: [{pid(), [module()], term()}]}).
 
 -type state() :: #state{}.
-
-%%------------------------------------------------------------------------------
-%% The maximum amount of time, that a process may lock modules before being
-%% brutally killed.
-%%------------------------------------------------------------------------------
--define(MAX_LOCK_TIME, 4400).
 
 %%%=============================================================================
 %%% API
@@ -84,7 +77,8 @@ init([]) ->
 handle_call({lock, MockPid, Mods}, From,
             State = #state{}) ->
     monitor(process, MockPid),
-    NewState = State#state{waiting_mocks = [{MockPid, Mods, From} | State#state.waiting_mocks]},
+    NewWaiting = [{MockPid, Mods, From} | State#state.waiting_mocks],
+    NewState = State#state{ waiting_mocks = NewWaiting},
     em_module_locker:handle_cast(perform_locking, NewState);
 
 handle_call(Request, _From, State) ->
@@ -95,26 +89,25 @@ handle_call(Request, _From, State) ->
                          {stop, term(), term()}.
 handle_cast(perform_locking,
             State) ->
-    NewState = lists:foldr(fun(M = {MockPid, Mods, From}, StateAcc) ->
-                                   AllModulesUnlocked = (Mods -- (StateAcc#state.locked_modules)) == Mods,
-                                   if AllModulesUnlocked ->
-                                           {ok, TRef} = timer:exit_after(?MAX_LOCK_TIME, MockPid, {module_hogging, Mods}),
-                                           gen_server:reply(From, ok),
-                                           StateAcc#state{
-                                             timers =
-                                                 dict:store(MockPid, TRef, StateAcc#state.timers),
-                                             locked_modules =
-                                                 StateAcc#state.locked_modules ++ Mods,
-                                             waiting_mocks =
-                                                 StateAcc#state.waiting_mocks -- [M],
-                                             locking_mocks =
-                                                 [M | StateAcc#state.locking_mocks]};
-                                      true ->
-                                           StateAcc
-                                   end
-                           end,
-                           State,
-                           State#state.waiting_mocks),
+    NewState = lists:foldr(
+                 fun(M = {_MockPid, Mods, From}, StateAcc) ->
+                         AllModulesUnlocked =
+                             (Mods -- (StateAcc#state.locked_modules)) == Mods,
+                         if AllModulesUnlocked ->
+                                 gen_server:reply(From, ok),
+                                 StateAcc#state{
+                                   locked_modules =
+                                       StateAcc#state.locked_modules ++ Mods,
+                                   waiting_mocks  =
+                                       StateAcc#state.waiting_mocks -- [M],
+                                   locking_mocks  =
+                                       [M | StateAcc#state.locking_mocks]};
+                            true ->
+                                 StateAcc
+                         end
+                 end,
+                 State,
+                 State#state.waiting_mocks),
     {noreply, NewState};
 
 handle_cast(Request, State) ->
@@ -125,27 +118,18 @@ handle_cast(Request, State) ->
 %%------------------------------------------------------------------------------
 -spec handle_info(Info :: term(), State :: state()) ->
                          {noreply, State :: state()} | {stop, term(), term()}.
-handle_info({'DOWN', _Ref, process, Pid, _Reason},
-            StateWithTimers = #state{timers = Timers}) ->
-    State = case dict:find(Pid, Timers) of
-                {ok, TRef} ->
-                    timer:cancel(TRef),
-                    StateWithTimers#state{timers = dict:erase(Pid, Timers)};
-                _ ->
-                    StateWithTimers
-    end,
+handle_info({'DOWN', _Ref, process, Pid, _Reason}, State) ->
     Mocks_To_Unlock = [M || M = {P, _, _} <- State#state.locking_mocks,
                             P == Pid],
     Mods_To_Unlock = [Mod || {_, Mods, _} <- Mocks_To_Unlock,
                             Mod <- Mods],
-
     Mocks_Not_Waiting_Anymore = [M || M = {P, _, _} <- State#state.waiting_mocks,
                                      P == Pid],
     gen_server:cast(?MODULE, perform_locking),
     {noreply,
      State#state{locked_modules = State#state.locked_modules -- Mods_To_Unlock,
-                 locking_mocks = State#state.locking_mocks -- Mocks_To_Unlock,
-                 waiting_mocks = State#state.waiting_mocks -- Mocks_Not_Waiting_Anymore}};
+                 locking_mocks  = State#state.locking_mocks -- Mocks_To_Unlock,
+                 waiting_mocks  = State#state.waiting_mocks -- Mocks_Not_Waiting_Anymore}};
 
 handle_info(Info, State) ->
     {stop, {unexpected_info, Info}, State}.
