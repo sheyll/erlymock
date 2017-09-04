@@ -174,11 +174,14 @@ check_arguments_test() ->
     em:replay(M),
     em:verify(M).
 
-gen_fsm_unimplemented_stops_test() ->
-    ?assertEqual({stop, normal, state}, em:handle_info(x, y, state)),
-    ?assertEqual({reply,{error,bad_request},z,state}, em:handle_sync_event(x, y, z, state)),
-    ?assertEqual({stop, normal, state}, em:handle_event(x, y, state)),
+em_statem_callback_code_change_test() ->
     ?assertEqual({ok, state_name, state}, em:code_change(old_vsn, state_name, state, extra)).
+
+em_statem_callback_bad_requests_ignore_test() ->
+    ?assertEqual({keep_state, state, {reply, from, {error,{bad_request, programming, x}}}}, em:programming({call, from}, x, state)),
+    ?assertEqual({keep_state, state, {reply, from, {error,{bad_request, no_expectations, x}}}}, em:no_expectations({call, from}, x, state)),
+    ?assertEqual({keep_state, state, {reply, from, {error,{bad_request, replaying, x}}}}, em:replaying({call, from}, x, state)),
+    ?assertEqual({keep_state, state, {reply, from, {error,{bad_request, deranged, x}}}}, em:deranged({call, from}, x, state)).
 
 nothing_test() ->
     {module, _} = code:ensure_loaded(mnesia),
