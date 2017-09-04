@@ -30,3 +30,4 @@ clean:
 	rm -f doc/*.html
 	rm -f doc/*.css
 	rm -f doc/*.png
+	rm -f TEST-*.xml
