@@ -3,3 +3,6 @@ target/
 ebin/
 .eunit/
 doc/
+_build/
+rebar.lock
+TEST-*.xml
