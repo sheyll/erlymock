@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author Sven Heyll <sven.heyll@lindenbaum.eu>
+%%% @author Sven Heyll <sven.heyll@gmail.com>
 %%% @copyright (C) 2011, Sven Heyll
 %%%-------------------------------------------------------------------
 -module(em_test).
@@ -28,21 +28,46 @@ simple_strict_test() ->
     ok2 = some_other_mod:some_other_fun(),
     em:verify(M).
 
+invokation_timout_test() ->
+    Pid = spawn_link(fun() ->
+                             M = em:new(),
+                             em:strict(M, some_mod, some_fun, [a]),
+                             em:replay(M, 1),
+                             receive never_to_receive -> ok end
+                     end),
+    process_flag(trap_exit, true),
+    receive
+        {'EXIT',
+         Pid,
+         Reason} ->
+            ?assertMatch({invokation_timeout,
+                          {missing_invokations,
+                           [{expectation,
+                             _Ref,
+                             _Group,
+                             some_mod,some_fun,[a],
+                             {return,ok},
+                             _Listeners}]}},
+                         Reason)
+    end.
+
 invalid_parameter_1_test() ->
     M = em:new(),
     em:strict(M, some_mod, some_fun, [a,
-                                         fun(B) ->
-                                                 B == b
-                                         end]),
+                                      fun(B) ->
+                                              B == b
+                                      end]),
     em:replay(M),
     process_flag(trap_exit, true),
-    ?assertMatch({'EXIT',
-                  {{case_clause,
-                   {unexpected_function_parameter,
-                    {error_in_parameter, 1}, {expected, a}, {actual, 666},
-                    {invokation, some_mod, some_fun, [666, b], _}}},
-                   _}},
-                 catch some_mod:some_fun(666, b)).
+    ?assertExit({mock_error,
+                 {unexpected_invokation, _,
+                  [{parameter_mismatch,
+                    {parameter, 1},
+                    {expected,  a},
+                    {actual,    666}, _}]}},
+                some_mod:some_fun(666, b)),
+    ?assertError({unexpected_invokation, _, _},
+                 em:verify(M)).
 
 invalid_order_test() ->
     M = em:new(),
@@ -50,14 +75,13 @@ invalid_order_test() ->
     em:strict(M, some_mod, some_fun, [a]),
     em:replay(M),
     process_flag(trap_exit, true),
-    ?assertMatch({'EXIT',
-                  {{case_clause,
-                    {unexpected_invokation,
-                     {actual,{invokation,some_mod,some_fun,[a], _}},
-                     {expected,{expectation,_Ref, some_mod,some_fun,[a,b],
-                                {return,ok},
-                                _Listeners}}}}, _}},
-                 catch some_mod:some_fun(a)).
+    ?assertExit({mock_error,
+                 {unexpected_invokation,
+                  {invokation, some_mod, some_fun, [a], _},
+                  _}},
+                 some_mod:some_fun(a)),
+    ?assertError({unexpected_invokation, _, _},
+                 em:verify(M)).
 
 too_many_invokations_test() ->
     M = em:new(),
@@ -65,36 +89,37 @@ too_many_invokations_test() ->
     em:replay(M),
     ok = some_mod:some_fun(a, b),
     process_flag(trap_exit, true),
-    ?assertMatch({'EXIT', {{case_clause,{unexpected_invokation,
-                                         {actual,
-                                          {invokation,some_mod,some_fun,[a, b], _}}}}, _}},
-                 catch some_mod:some_fun(a, b)).
+    ?assertExit({mock_error,
+                 {unexpected_invokation,
+                  {invokation, some_mod, some_fun, [a,b], _}}},
+                 some_mod:some_fun(a,b)),
+    ?assertError({unexpected_invokation, _}, em:verify(M)).
 
 invokations_missing_test() ->
     M = em:new(),
     em:strict(M, some_mod, some_fun, [a,b]),
     em:replay(M),
     process_flag(trap_exit, true),
-    ?assertError({badmatch,
-                  {invokations_missing,
-                   [{expectation,_, some_mod,some_fun,[a,b],{return,ok}, _}]}},
+    ?assertError({invokations_missing, [_]},
                  em:verify(M)).
 
 invalid_parameter_2_test() ->
     M = em:new(),
     em:strict(M, some_mod, some_fun, [a,
-                                         fun(B) ->
-                                                 B == b
-                                         end]),
+                                      fun(B) ->
+                                              B == b
+                                      end]),
     em:replay(M),
     process_flag(trap_exit, true),
-    ?assertMatch({'EXIT', {{case_clause,
-                            {unexpected_function_parameter,
-                             {error_in_parameter, 2},
-                             {expected, _},
-                             {actual, 666},
-                             {invokation, some_mod, some_fun, [a, 666], _}}}, _}},
-                 catch(some_mod:some_fun(a, 666))).
+    ?assertExit({mock_error,
+                 {unexpected_invokation, _,
+                  [{parameter_mismatch,
+                    {parameter, 2},
+                    {expected,  _},
+                    {actual,    666}, _}]}},
+                some_mod:some_fun(a, 666)),
+    ?assertError({unexpected_invokation, _, _},
+                 em:verify(M)).
 
 strict_and_stub_test() ->
     M = em:new(),
@@ -149,11 +174,14 @@ check_arguments_test() ->
     em:replay(M),
     em:verify(M).
 
-gen_fsm_unimplemented_stops_test() ->
-    ?assertEqual({stop, normal, state}, em:handle_info(x, y, state)),
-    ?assertEqual({stop, normal, ok, state}, em:handle_sync_event(x, y, z, state)),
-    ?assertEqual({stop, normal, state}, em:handle_event(x, y, state)),
+em_statem_callback_code_change_test() ->
     ?assertEqual({ok, state_name, state}, em:code_change(old_vsn, state_name, state, extra)).
+
+em_statem_callback_bad_requests_ignore_test() ->
+    ?assertEqual({keep_state, state, {reply, from, {error,{bad_request, programming, x}}}}, em:programming({call, from}, x, state)),
+    ?assertEqual({keep_state, state, {reply, from, {error,{bad_request, no_expectations, x}}}}, em:no_expectations({call, from}, x, state)),
+    ?assertEqual({keep_state, state, {reply, from, {error,{bad_request, replaying, x}}}}, em:replaying({call, from}, x, state)),
+    ?assertEqual({keep_state, state, {reply, from, {error,{bad_request, deranged, x}}}}, em:deranged({call, from}, x, state)).
 
 nothing_test() ->
     {module, _} = code:ensure_loaded(mnesia),
@@ -208,7 +236,7 @@ await_test() ->
     ?assertEqual({error, invalid_handle}, em:await(M, xxx)),
     em:verify(M).
 
-error_module_already_locked_test() ->
+error_module_already_mocked_test() ->
     process_flag(trap_exit, true),
     M1 = em:new(),
     em:strict(M1, xxx,y,[]),
@@ -218,13 +246,13 @@ error_module_already_locked_test() ->
     em:strict(M2, xxx, y, []),
     try em:replay(M2) of
         _NoError ->
-            throw(expected_module_already_locked_error)
+            throw(expected_module_already_mocked_error)
     catch
         exit:{{bad_return_value,
                {em_error_module_already_mocked, xxx}}, _} ->
             pass;
         C:E ->
-            throw({expected_module_already_locked_error_but_got, C, E})
+            throw({expected_module_already_mocked_error_but_got, C, E})
     end,
     xxx:y(),
     em:verify(M1).
@@ -235,6 +263,225 @@ verify_missing_invokation_test() ->
     em:strict(M, xxx,y,[]),
     em:replay(M),
     ?assertError({badmatch, {invokations_missing, _}}, em:verify(M)).
+
+await_no_expectations_test() ->
+    M = em:new(),
+    F = em:strict(M, mod, f1, []),
+    em:replay(M),
+    mod:f1(),
+    ?assertEqual({success, self(), []},
+                 em:await(M, F)),
+    em:verify(M).
+
+two_groups_test() ->
+    M = em:new(),
+
+    em:strict(M, m1, f1, []),
+
+    [G1, G2] = em:new_groups(M, [g1, g2]),
+    em:strict(G1, g1, f1, []),
+    em:strict(G1, g1, f2, []),
+    em:strict(G2, g2, f1, []),
+    em:strict(G2, g2, f2, []),
+
+    em:strict(M, m1, f2, []),
+    em:replay(M),
+
+    m1:f1(),
+
+    g2:f1(),
+    g1:f1(),
+    g1:f2(),
+    g2:f2(),
+
+    m1:f2(),
+
+    em:await_expectations(M).
+
+two_groups2_test() ->
+    M = em:new(),
+
+    em:strict(M, m1, f1, []),
+
+    [G1, G2] = em:new_groups(M, [g1, g2]),
+    em:strict(G1, g1, f1, []),
+    em:strict(G1, g1, f2, []),
+    em:strict(G2, g2, f1, []),
+    em:strict(G2, g2, f2, []),
+
+    em:replay(M),
+
+    m1:f1(),
+
+    g2:f1(),
+    g1:f1(),
+    g2:f2(),
+    g1:f2(),
+
+    em:await_expectations(M).
+
+mock_deranged_invalid_invokation_test() ->
+    M = em:new(),
+
+    em:strict(M, mod, f1, [right]),
+    em:strict(M, mod, f2, [left]),
+    em:strict(M, mod, f3, []),
+
+    em:replay(M),
+
+    mod:f1(right),
+
+    ?assertExit({mock_error,
+                 {unexpected_invokation,
+                  {invokation,
+                   mod, f2, [right], _},
+                  _}},
+                mod:f2(right)),
+
+    ?assertExit({mock_error, mock_deranged},
+                 mod:f1(wrong)),
+
+    ?assertExit({mock_error, mock_deranged},
+                 mod:f3()),
+
+    ?assertError({unexpected_invokation,
+                  {invokation,
+                   mod, f2, [right], _},
+                  _},
+                 em:verify(M)).
+
+mock_deranged_no_expectation_test() ->
+    M = em:new(),
+
+    em:strict(M, mod, f1, [right]),
+
+    em:replay(M),
+
+    mod:f1(right),
+
+    MockError = {unexpected_invokation,
+                  {invokation,
+                   mod, f1, [left], self()}},
+
+    ?assertExit({mock_error, MockError},
+                mod:f1(left)),
+
+    ?assertExit({mock_error, mock_deranged},
+                mod:f1(wrong)),
+
+    ?assertError(MockError,
+                 em:verify(M)).
+
+
+mock_deranged_stub_no_expectation_test() ->
+    M = em:new(),
+
+    em:stub(M, mod, fstub, []),
+    em:strict(M, mod, f1, [right]),
+
+    em:replay(M),
+
+    mod:f1(right),
+
+    MockError = {unexpected_invokation,
+                  {invokation,
+                   mod, f1, [left], self()}},
+    ?assertExit({mock_error, MockError},
+                mod:f1(left)),
+
+    ?assertExit({mock_error, mock_deranged},
+                mod:fstub()),
+
+    ?assertError(MockError,
+                 em:verify(M)).
+
+mock_deranged_stub_test() ->
+    M = em:new(),
+
+    em:stub(M, mod, fstub, []),
+    em:strict(M, mod, f1, [right]),
+    em:strict(M, mod, f2, [right]),
+
+    em:replay(M),
+
+    mod:f1(right),
+
+    ?assertExit({mock_error,
+                 {unexpected_invokation,
+                  {invokation,
+                   mod, f1, [left], _},
+                 _}},
+                mod:f1(left)),
+
+    ?assertExit({mock_error, mock_deranged},
+                mod:fstub()),
+
+    ?assertError({unexpected_invokation,
+                  {invokation,
+                   mod, f1, [left], _},
+                 _},
+                 em:verify(M)).
+
+mock_deranged_await_test() ->
+    M = em:new(),
+
+    Already = em:stub(M, mod, fstub, []),
+    em:strict(M, mod, f1, [right]),
+    NotYet = em:strict(M, mod, f2, [right]),
+
+    em:replay(M),
+
+    mod:f1(right),
+
+    ?assertExit({mock_error,
+                 {unexpected_invokation,
+                  {invokation,
+                   mod, f1, [left], _},
+                 _}},
+                mod:f1(left)),
+
+    ?assertEqual({error, mock_deranged},
+                 em:await(M, Already)),
+
+    ?assertEqual({error, mock_deranged},
+                 em:await(M, NotYet)),
+
+    ?assertError({unexpected_invokation,
+                  {invokation,
+                   mod, f1, [left], _},
+                  _},
+                 em:verify(M)).
+
+mock_deranged_await_expectations_test() ->
+    M = em:new(),
+
+    em:strict(M, mod, f1, [right]),
+    em:strict(M, mod, f2, [left]),
+    em:strict(M, mod, f3, []),
+
+    em:replay(M),
+
+    mod:f1(right),
+
+    ?assertExit({mock_error,
+                 {unexpected_invokation,
+                  {invokation,
+                   mod, f2, [right], _},
+                  _}},
+                mod:f2(right)),
+
+    ?assertExit({mock_error, mock_deranged},
+                 mod:f1(wrong)),
+
+    ?assertExit({mock_error, mock_deranged},
+                 mod:f3()),
+
+    ?assertError({unexpected_invokation,
+                  {invokation,
+                   mod, f2, [right], _},
+                  _},
+                 em:await_expectations(M)).
+
 
 generate_call_log_test() ->
 	?debugHere,

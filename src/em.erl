@@ -1,58 +1,66 @@
 %%%-----------------------------------------------------------------------------
-%%% @author Sven Heyll <sven.heyll@lindenbaum.eu>
-%%% @copyright (C) 2011, 2012 Sven Heyll
+%%% @author Sven Heyll <sven.heyll@gmail.com>
+%%% @copyright (C) 2011-2017 Sven Heyll
 %%% @doc
 %%% The module name 'em' stands for 'Erly Mock'.
 %%%
 %%% <p>This mocking library works similar to Easymock.</p>
 %%%
-%%% <p>After a mock process is started by {@link new/0} it can be
-%%% programmed to expect function calls and to react to them in two
-%%% ways: <ul><li>by returning a value</li><li>by executing an arbitrary
-%%% function</li></ul>
-%%% This is done with {@link strict/4}, {@link strict/5}, {@link stub/4}, {@link stub/5}
-%%% </p>
+%%% <p>After a mock process is started by {@link new/0} it can be programmed to
+%%% expect function calls and to react to them in two ways: <ul><li>by returning
+%%% a value</li><li>by executing an arbitrary function</li></ul> This is done
+%%% with {@link strict/4}, {@link strict/5}, {@link stub/4}, {@link stub/5} </p>
 %%%
 %%% <p>Before the code under test is executed, the mock must be told
 %%% that the programming phase is over by {@link replay/1}.</p>
 %%%
-%%% <p>In the next phase the code under test is run, and might or
-%%% might not call the functions mocked.
-%%% The mock process checks that all functions programmed with
-%%% {@link strict/4}, {@link strict/5} are called in the
-%%% correct order, with the expected arguments and reacts in the way
-%%% defined during the programming phase. If a mocked function is called
-%%% although another function was expected, or if an expected function
-%%% was called with different arguments, the mock process dies and
-%%% prints a comprehensive error message before failing the test.</p>
+%%% <p>In the next phase the code under test is run, and might or might not call
+%%% the functions mocked.  The mock process checks that all functions programmed
+%%% with {@link strict/4}, {@link strict/5} are called in the correct order,
+%%% with the expected arguments and reacts in the way defined during the
+%%% programming phase. If a mocked function is called although another function
+%%% was expected, or if an expected function was called with different
+%%% arguments, the mock process dies and prints a comprehensive error message
+%%% before failing the test.</p>
+%%%
+%%% <p>To support mock invokations from multiple processes the strictness
+%%% requirement can be reduced to calls belonging to the same group. {@link
+%%% new_groups/2} creates a list of named groups, where calls belongig to
+%%% different groups may occur in any order. A group is passed as mock reference
+%%% (1st parameter) to {@link strict/5} or {@link strict/4}. Use {@link
+%%% await/1} with a list of groups to block the caller until all groups
+%%% are finished, i.e. the expectations assigned to each group via {@link
+%%% strict/5} were invoked. NOTE: It is prohibited to use the same expectations
+%%% with different return values among a list groups created together.</p>
 %%%
 %%% <p>At the end of a unit test {@link await_expectations/1} is called to
 %%% await all invocations defined during the programming phase.</p>
 %%%
 %%% <p>An alternative to {@link await_expectations/1} is {@link verify/1}. It is
 %%% called to check for missing invocations at the end of the programming phase,
-%%% if any expected invocations are missing at verify will throw an exception.</p>
+%%% if any expected invocations are missing at verify will throw an
+%%% exception.</p>
 %%%
 %%% <p>When the mock process exits it tries hard to remove all modules, that
 %%% were dynamically created and loaded during the programming phase.</p>
 %%%
-%%% NOTE: This library works by purging the modules mocked and replacing
-%%% them with dynamically created and compiled code, so be careful what
-%%% you mock, i.e. it brings chaos to mock modules from kernel. This also
-%%% implies, that tests that mock the same modules must be run sequentially.
+%%% NOTE: This library works by purging the modules mocked and replacing them
+%%% with dynamically created and compiled code, so be careful what you mock,
+%%% i.e. it brings chaos to mock modules from kernel. This also implies, that
+%%% tests that mock the same modules must be run sequentially.
 %%%
 %%% Apart from that, it is very advisable to <b>only mock owned modules</b>
 %%% anyway.
 %%%
 %%% @end
 %%%-----------------------------------------------------------------------------
-%%% Copyright (c) 2011,2012 Sven Heyll
+%%% Copyright (c) 2011-2017 Sven Heyll
 %%%
 %%% Permission is hereby granted, free of charge, to any person obtaining a copy
-%%% of this software and associated documentation files (the "Software"), to deal
-%%% in the Software without restriction, including without limitation the rights
-%%% to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-%%% copies of the Software, and to permit persons to whom the Software is
+%%% of this software and associated documentation files (the "Software"), to
+%%% deal in the Software without restriction, including without limitation the
+%%% rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+%%% sell copies of the Software, and to permit persons to whom the Software is
 %%% furnished to do so, subject to the following conditions:
 %%%
 %%% The above copyright notice and this permission notice shall be included in
@@ -62,44 +70,48 @@
 %%% IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 %%% FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 %%% AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-%%% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-%%% OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-%%% THE SOFTWARE.
+%%% LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+%%% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+%%% IN THE SOFTWARE.
 %%%
 %%%-----------------------------------------------------------------------------
 
 -module(em).
 
--behaviour(gen_fsm).
+-behaviour(gen_statem).
 
 %% public API ---
 -export([new/0,
+         new_groups/2,
+	     nothing/2,
          strict/4,
          strict/5,
+         any/0,
+         zelf/0,
          stub/4,
          stub/5,
          replay/1,
+         replay/2,
          await/2,
          await_expectations/1,
          verify/1,
-         any/0,
-         zelf/0,
-         nothing/2,
 		 call_log/1]).
 
-%% gen_fsm callbacks ---
+%% gen_statem callbacks ---
 -export([programming/3,
          replaying/3,
          no_expectations/3,
-         terminate/3,
+         deranged/3,
+         callback_mode/0,
          init/1,
-         code_change/4,
-         handle_event/3,
-         handle_info/3,
-         handle_sync_event/4]).
+         terminate/3,
+         code_change/4
+         ]).
 
 %% !!!NEVER CALL THIS FUNCTION!!! ---
 -export([invoke/4]).
+
+-export_type([group/0, group_tag/0, timeout_millis/0]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% important types
@@ -123,6 +135,17 @@
 -type answer() :: {function, fun(([any()]) -> any())}
                   | {return, any()} .
 
+%%------------------------------------------------------------------------------
+%% A group is a pair with a tag for a group and a mock process.
+%%------------------------------------------------------------------------------
+-type group_tag() :: {term(), reference()}.
+-type group() :: {group, pid(), group_tag()}.
+
+%%------------------------------------------------------------------------------
+%% Timout for {@link replay/2}
+%%------------------------------------------------------------------------------
+-type timeout_millis() :: non_neg_integer() | infinity.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% API
 %%
@@ -141,10 +164,31 @@
 %% @end
 %%------------------------------------------------------------------------------
 -spec new() ->
-                 pid().
+                 group().
 new() ->
-    {ok, Pid} = gen_fsm:start_link(?MODULE, [erlang:self()], []),
-    Pid.
+    {ok, M} = gen_statem:start_link(?MODULE, [erlang:self()], []),
+    RootTag = {root, make_ref()},
+    {group, M, RootTag}.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+callback_mode() -> state_functions.
+
+%%------------------------------------------------------------------------------
+%% @doc
+%% Create a group handle to assign mock expectation to. The result can be passed
+%% to {@link strict/4} or {@link strict/5} and {@link await/2}.
+%% @end
+%%------------------------------------------------------------------------------
+-spec new_groups(group(), [term()]) ->
+                       [group()].
+new_groups({group, M, _}, GroupNames) ->
+    GroupCluster = make_ref(),
+    [{group,
+      M,
+      {GroupName, GroupCluster}}
+     || GroupName <- GroupNames].
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -180,10 +224,9 @@ new() ->
 %%
 %% @end
 %%------------------------------------------------------------------------------
--spec strict(pid(), atom(), atom(), args()) ->
+-spec strict(group(), atom(), atom(), args()) ->
                     reference().
-strict(M, Mod, Fun, Args)
-  when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
+strict(M, Mod, Fun, Args) ->
     strict(M, Mod, Fun, Args, {return, ok}).
 
 %%------------------------------------------------------------------------------
@@ -209,14 +252,15 @@ strict(M, Mod, Fun, Args)
 %% </ul>
 %% @end
 %%------------------------------------------------------------------------------
--spec strict(pid(), atom(), atom(), args(), answer()) ->
+-spec strict(group(), atom(), atom(), args(), answer()) ->
                     reference().
-strict(M, Mod, Fun, Args, Answer = {return, _})
+strict({group, M, Group}, Mod, Fun, Args, Answer = {return, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
-    gen_fsm:sync_send_event(M, {strict, Mod, Fun, Args, Answer});
-strict(M, Mod, Fun, Args, Answer = {function, _})
+    gen_statem:call(M, {strict, Group, Mod, Fun, Args, Answer}, infinity);
+
+strict({group, M, Group}, Mod, Fun, Args, Answer = {function, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
-    gen_fsm:sync_send_event(M, {strict, Mod, Fun, Args, Answer}).
+    gen_statem:call(M, {strict, Group, Mod, Fun, Args, Answer}, infinity).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -226,10 +270,9 @@ strict(M, Mod, Fun, Args, Answer = {function, _})
 %% @see strict/4. <code>strict/4</code>
 %% @end
 %%------------------------------------------------------------------------------
--spec stub(pid(), atom(), atom(), args()) ->
+-spec stub(group(), atom(), atom(), args()) ->
                   ok.
-stub(M, Mod, Fun, Args)
-  when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
+stub(M, Mod, Fun, Args) ->
     stub(M, Mod, Fun, Args, {return, ok}).
 
 %%------------------------------------------------------------------------------
@@ -241,14 +284,15 @@ stub(M, Mod, Fun, Args)
 %% @see strict/5. <code>strict/5</code>
 %% @end
 %%------------------------------------------------------------------------------
--spec stub(pid(), atom(), atom(), args(), answer()) ->
+-spec stub(group(), atom(), atom(), args(), answer()) ->
                   ok.
-stub(M, Mod, Fun, Args, Answer = {return, _})
+stub({group, M, Group = {root, _}}, Mod, Fun, Args, Answer = {return, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
-    ok = gen_fsm:sync_send_event(M, {stub, Mod, Fun, Args, Answer});
-stub(M, Mod, Fun, Args, Answer = {function, _})
+    ok = gen_statem:call(M, {stub, Group, Mod, Fun, Args, Answer}, infinity);
+
+stub({group, M, Group = {root, _}}, Mod, Fun, Args, Answer = {function, _})
   when is_pid(M), is_atom(Mod), is_atom(Fun), is_list(Args) ->
-    ok = gen_fsm:sync_send_event(M, {stub, Mod, Fun, Args, Answer}).
+    ok = gen_statem:call(M, {stub, Group, Mod, Fun, Args, Answer}, infinity).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -257,10 +301,10 @@ stub(M, Mod, Fun, Args, Answer = {function, _})
 %% exception.
 %% @end
 %%------------------------------------------------------------------------------
--spec nothing(pid(), atom()) ->
+-spec nothing(group(), atom()) ->
 		     ok.
-nothing(M, Mod) when is_pid(M), is_atom(Mod) ->
-   ok = gen_fsm:sync_send_event(M, {nothing, Mod}).
+nothing({group, M, {root, _}}, Mod) when is_pid(M), is_atom(Mod) ->
+   ok = gen_statem:call(M, {nothing, Mod}, infinity).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -274,9 +318,20 @@ nothing(M, Mod) when is_pid(M), is_atom(Mod) ->
 %% process dies and - if used in a typical edoc test suite - fails the test.
 %% @end
 %%------------------------------------------------------------------------------
--spec replay(M :: term()) -> ok.
-replay(M) ->
-    ok = gen_fsm:sync_send_event(M, replay).
+-spec replay(group()) -> ok.
+replay(G) ->
+    replay(G, infinity).
+
+%%------------------------------------------------------------------------------
+%% @doc
+%% Finishes the programming phase and switches to the replay phase, expecting
+%% that invokations are recorded at least once every `InvokationTimeout' millis.
+%% @see replay/1
+%% @end
+%%------------------------------------------------------------------------------
+-spec replay(group(), timeout_millis()) -> ok.
+replay({group, M, {root, _}}, InvokationTimeout) ->
+    ok = gen_statem:call(M, {replay, InvokationTimeout}, infinity).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -288,13 +343,28 @@ replay(M) ->
 %% happened.</p><p>If the handle is not valid, an error is returned.</p>
 %% @end
 %% ------------------------------------------------------------------------------
--spec await(M :: term(), Handle :: reference()) ->
+-spec await(group(), reference()) ->
                    {success,
                     InvPid :: pid(),
                     Args :: [term()]} |
-                   {error, invalid_handle}.
-await(M, Handle) ->
-    gen_fsm:sync_send_all_state_event(M, {await, Handle}, 5000).
+                   {error, term()}.
+await({group, M, {root, _}}, Handle) ->
+    gen_statem:call(M, {await, Handle}, infinity).
+
+%%------------------------------------------------------------------------------
+%% @doc
+%% Retrieve a list of successfully mocked invokations, i.e. all calls that were
+%% accepted by the `em' process in the `replay' phase. Both strict and stub
+%% invokations are recorded.  NOTE: The Answer might as well be a function,
+%% depending on the `return' argument passed to `strict' or `stub'.
+%% @end
+%%------------------------------------------------------------------------------
+-spec call_log(group()) ->  [{Mod :: atom(),
+                              Func :: atom(),
+                              Args :: [term()],
+                              Answer :: term()}].
+call_log({group, M, {root, _}}) ->
+    gen_statem:call(M, get_call_log, infinity).
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -303,9 +373,19 @@ await(M, Handle) ->
 %% all modules installed.
 %% @end
 %%------------------------------------------------------------------------------
--spec await_expectations(M :: term()) -> ok.
-await_expectations(M) ->
-    ok = gen_fsm:sync_send_all_state_event(M, await_expectations, 5000).
+-spec await_expectations(group()) -> ok.
+await_expectations({group, M, {root, _}}) ->
+    case
+        gen_statem:call(M, await_expectations, infinity)
+    of
+        ok ->
+            ok;
+
+        Error ->
+            error_logger:error_msg("erlymock verification failed: ~p",
+                                   [Error]),
+            error(Error)
+    end.
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -315,9 +395,19 @@ await_expectations(M) ->
 %% Otherwise the mock process exits normally, returning <code>ok</code>.
 %% @end
 %%------------------------------------------------------------------------------
--spec verify(M :: term()) -> ok.
-verify(M) ->
-    ok = gen_fsm:sync_send_event(M, verify).
+-spec verify(group()) -> ok.
+verify({group, M, {root, _}}) ->
+    case
+        gen_statem:call(M, verify, infinity)
+    of
+        ok ->
+            ok;
+
+        Error ->
+            error_logger:error_msg("erlymock verification failed: ~p",
+                                   [Error]),
+            error(Error)
+    end.
 
 %%------------------------------------------------------------------------------
 %% @doc
@@ -349,7 +439,7 @@ zelf() ->
 %% @doc
 %% retrieve a list of functions since the creation of the module.
 %% <p>The log will track the calls regardless whether they are done for a strict
-%% or stub function. In case the answers are not evaluated, as an function used 
+%% or stub function. In case the answers are not evaluated, as an function used
 %% here may have side effects and depend on the process in which it is evaluated.
 %% </p>
 %% @end
@@ -365,37 +455,43 @@ call_log(M) -> gen_fsm:sync_send_all_state_event(M, get_call_log).
 %%
 
 -record(expectation,
-        {id :: reference(),
-         m :: atom(),
-         f :: atom(),
-         a :: args(),
-         answer :: answer(),
-         listeners :: [GenFsmFrom :: term()]}).
+        {id               :: reference(),
+         g                :: group_tag(),
+         m                :: atom(),
+         f                :: atom(),
+         a                :: args(),
+         answer           :: answer(),
+         listeners = []   :: [GenFsmFrom :: term()]}).
 
--record(state, {
-          test_proc :: pid(),
-          strict :: [#expectation{}],
-          strict_log :: [{strict_log,
-                          ERef :: reference(),
-                          IPid :: pid(),
-                          Args :: [term()]}],
-          stub  :: [#expectation{}],
-		  call_log :: [{Mod :: atom(),
-						Func :: atom(),
-						Args :: [term()],
-						Answer :: term()}],
-	  blacklist :: [atom()],
-          mocked_modules :: [{atom(), {just, term()}|nothing}],
-          await_invokations_reply :: nothing | {just, term()}
-         }).
+-record(strict_log,
+        {grpt             :: group_tag(),
+         eref             :: reference(),
+         ipid             :: pid(),
+         args             :: [term()]}).
+
+-record(state,
+        {test_proc        :: pid(),
+         inv_to           :: timeout_millis() | infinity,
+         strict           :: [#expectation{}],
+         strict_log       :: [#strict_log{}],
+         stub             :: [#expectation{}],
+         call_log         :: [{Mod :: atom(),
+					          Func :: atom(),
+						      Args :: [term()],
+						      Answer :: term()}],
+         blacklist        :: [atom()],
+         mocked_modules   :: [{atom(), {just, term()}|nothing}],
+         on_finished      :: term(), % GenFsmFrom
+         error = no_error :: no_error | term()
+        }).
 
 -type statedata() :: #state{}.
 
 -define(ERLYMOCK_COMPILED, erlymock_compiled).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%% gen_fsm callbacks
-%%i
+%%%% gen_statem callbacks
+%%
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -409,172 +505,213 @@ init([TestProc]) ->
      programming,
      #state{
         test_proc = TestProc,
+        inv_to = infinity,
         strict = [],
         strict_log = [],
         stub = [],
-		call_log =[],
+        call_log =[],
         blacklist = [],
-        mocked_modules = [],
-        await_invokations_reply = nothing}}.
+        mocked_modules = []}}.
 
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
--spec programming(Event :: term(), From :: term(), State :: statedata()) ->
-                         {reply, Reply :: term(), NextState :: atom(),
-                          NewStateData :: statedata()}.
-programming({strict, Mod, Fun, Args, Answer},
-            _From,
+-spec programming(gen_statem:event_type(), EventContent :: term(), statedata()) ->
+                         gen_statem:event_handler_result(no_expectations|replaying).
+programming({call, From},
+            {strict, Group, Mod, Fun, Args, Answer},
             State = #state{strict = Strict}) ->
     InvRef = make_ref(),
-    {reply,
-     InvRef,
-     programming,
+    {keep_state,
      State#state{
        strict = [#expectation{id = InvRef,
+                              g = Group,
                               m = Mod,
                               f = Fun,
                               a = Args,
                               answer = Answer,
                               listeners = []}
-                 |Strict]}};
+                 |Strict]},
+       {reply, From, InvRef}};
 
-programming({stub, Mod, Fun, Args, Answer},
-            _From,
+programming({call, From},
+            {stub, Group, Mod, Fun, Args, Answer},
             State = #state{stub = Stub}) ->
-    {reply,
-     ok,
-     programming,
+    InvRef = make_ref(),
+    {keep_state,
      State#state{
-       stub = [#expectation{m = Mod, f = Fun, a = Args, answer = Answer}|Stub]}};
+       stub = [#expectation{id = InvRef,
+                            g = Group,
+                            m = Mod,
+                            f = Fun,
+                            a = Args,
+                            answer = Answer,
+                            listeners = []}
+              |Stub]},
+     {reply, From, ok}};
 
-programming({nothing, Mod},
-            _From,
+programming({call, From},
+            {nothing, Mod},
             State = #state{blacklist = BL}) ->
-    {reply,
-     ok,
-     programming,
+    {keep_state,
      State#state{
-       blacklist = [Mod | BL]}};
+       blacklist = [Mod | BL]},
+     {reply, From, ok}};
 
-programming(replay,
-            _From,
-            State = #state{strict = Strict}) ->
-    MMs = install_mock_modules(State),
-    {reply,
-     ok,
-     case Strict of
-         [] -> no_expectations;
-         _ -> replaying
-     end,
-     State#state{
-       strict = lists:reverse(Strict),
-       mocked_modules = MMs}}.
+programming({call, From},
+            {replay, InvTo},
+            State) ->
+    NextState = load_mock_modules(
+                  prepare_strict_invocations(
+                      set_invokation_timeout(InvTo, State))),
+    NextStateName = case NextState#state.strict of
+                        [] -> no_expectations;
+                        _ -> replaying
+                    end,
+    {next_state,
+     NextStateName,
+     NextState,
+     [{reply, From, ok}
+     |[start_invokation_timer(NextState)||NextStateName == replaying]]};
+
+programming({call, From}, get_call_log, State) ->
+    {keep_state, State,
+     {reply, From, lists:reverse(State#state.call_log)}};
+
+programming({call, From}, Event, State) ->
+    {keep_state, State, {reply, From, {error, {bad_request, programming, Event}}}}.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
--spec replaying(Event :: term(), From :: term(), StateData :: statedata()) ->
-                       {reply, Reply :: term(), NextState :: atom(),
-                        NewStateData :: statedata()} |
-                       {stop, Reason :: term(), Reply :: term(),
-                        NewStateData :: statedata()}.
-replaying(I = {invokation, Mod, Fun, Args, IPid},
-          From,
-          State = #state{
-            await_invokations_reply = AwInvRepl,
-            strict = [#expectation{
-                         id     = ERef,
-                         m      = Mod,
-                         f      = Fun,
-                         a      = EArgs,
-                         answer = Answer,
-                         listeners = Listeners}
-                      |Rest],
-			call_log = CallLog})
-  when length(EArgs) == length(Args) ->
-    case check_args(Args, EArgs, IPid) of
-        true ->
-            gen_fsm:reply(From, Answer),
-            [gen_fsm:reply(Listener, {success, IPid, Args})
-             || Listener <- Listeners],
-            NextState = case Rest of
-                            [] -> no_expectations;
-                            _ ->
-                                replaying
-                        end,
-            if NextState =:= replaying orelse AwInvRepl =:= nothing ->
-                    {next_state, NextState,
-                     State#state{strict=Rest,
-                                 strict_log =
-                                     [{strict_log, ERef, IPid, Args}
-                                      | State#state.strict_log],
-								 call_log = [{Mod,Fun,Args,Answer}|CallLog]}};
-               true ->
-                    {just, AIR} = AwInvRepl,
-                    gen_fsm:reply(AIR, ok),
-                    {stop, normal, State}
-            end;
-        {error, Index, Expected, Actual} ->
-            Reason = {unexpected_function_parameter,
-                      {error_in_parameter, Index},
-                      {expected, Expected},
-                      {actual, Actual},
-                      I},
-            {stop, Reason, Reason, State}
+-spec replaying(gen_statem:event_type(), EventContent :: term(), statedata()) ->
+                       gen_statem:event_handler_result(no_expectations|deranged).
+replaying({timeout, invokation_timeout},
+          invokation_timeout,
+          State = #state{ strict = Expectations}) ->
+    {stop, {invokation_timeout, {missing_invokations, Expectations}}, State};
+
+replaying({call, From},
+          Inv = {invokation, _M, _F, _A, _IPid},
+          St) ->
+    case
+        find_matching_expectation(
+          Inv,
+          [],
+          get_next_expectations(St))
+    of
+        {ok, E = #expectation{}} ->
+            stop_or_continue_replay(
+              answer_invokation(Inv, E, From),
+              remove_expectation(
+                E,
+                log_invokation(Inv, E, St)));
+
+        {error, Error} ->
+            enter_deranged([{reply, From, {'$em_error', Error}}], Error, St)
     end;
 
-replaying(I = {invokation, M, F, A, _IPid},
-          _From,
-          State = #state{
-	    strict = [E|_],
-		call_log = CallLog}) ->
-    case handle_stub_invokation(I, State#state.stub) of
-	{ok, Answer} ->
-	    {reply, Answer, replaying, 
-		 State#state{call_log = [{M, F, A, Answer}|CallLog]}};
-
-	error ->
-	    Reason = {unexpected_invokation, {actual, I}, {expected, E}},
-	    {stop, Reason, Reason, State}
-    end;
-
-replaying(verify, _From, State) ->
+replaying({call, From}, verify, State) ->
     Reason = {invokations_missing, State#state.strict},
-    {stop, Reason, Reason, State}.
+    {stop_and_reply, normal, {reply, From, Reason}, State};
+
+replaying({call, From}, {await, H}, State) ->
+    {NewState, ReplyActions} = add_invokation_listener(From, H, State),
+    {keep_state, NewState, ReplyActions};
+
+replaying({call, From},
+          await_expectations,
+          State = #state{on_finished = undefined}) ->
+    {keep_state, State#state{ on_finished = From }};
+
+replaying({call, From}, get_call_log, State) ->
+    {keep_state, State,
+     {reply, From, lists:reverse(State#state.call_log)}};
+
+replaying({call, From}, Event, State) ->
+    {keep_state, State, {reply, From, {error, {bad_request, replaying, Event}}}}.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
--spec no_expectations(Event :: term(), From :: term(),
-                      StateData :: statedata()) ->
-                             {reply, Reply :: term(), NextState :: atom(),
-                              NewStateData :: statedata()} |
-                             {stop, Reason :: term(), Reply :: term(),
-                              NewStateData :: statedata()}.
-no_expectations(I = {invokation, M, F, A, _IPid}, _From, State) ->
-    case handle_stub_invokation(I, State#state.stub) of
-        {ok, Answer} ->
-            {reply, Answer, no_expectations, 
-			 State#state{call_log = [{M, F, A, Answer}| State#state.call_log]}};
+-spec no_expectations(gen_statem:event_type(),
+                      EventData :: term(),
+                      statedata()) ->
+                        gen_statem:event_handler_result(deranged).
+no_expectations({call, From},
+                {invokation, Mod, Fun, Args, IPid},
+                State = #state{call_log = CallLog}) ->
+    Stubs = State#state.stub,
+    MatchingStubs = [Stub
+                    || Stub = #expectation {m = M, f = F, a = A} <- Stubs,
+                       M == Mod,
+                       F == Fun,
+                       length(Args) == length(A),
+                       check_args(Args, A, IPid)],
+    case MatchingStubs of
+        [#expectation{answer = Answer}|_] ->
+            {keep_state,
+             State#state{call_log = [{Mod, Fun, Args, Answer}|CallLog]},
+             [{reply, From, Answer}]};
 
-        error ->
-            Reason = {unexpected_invokation, {actual, I}},
-            {stop, Reason, Reason, State}
+        _ ->
+            Error = {unexpected_invokation, {invokation, Mod, Fun, Args, IPid}},
+            enter_deranged([{reply, From, {'$em_error', Error}}], Error, State)
     end;
 
-no_expectations(verify, _From, State) ->
-    {stop, normal, ok, State}.
+no_expectations({call, From}, verify, State) ->
+    {stop_and_reply, normal, {reply, From, ok}, State};
+
+no_expectations({call, From}, await_expectations, State) ->
+    {stop_and_reply, normal, {reply, From, ok}, State};
+
+no_expectations({call, From}, {await, H}, State) ->
+    {NewState, ReplyActions} = add_invokation_listener(From, H, State),
+    {keep_state, NewState, ReplyActions};
+
+no_expectations({call, From}, get_call_log, State) ->
+    {keep_state, State,
+     {reply, From, lists:reverse(State#state.call_log)}};
+
+no_expectations({call, From}, Event, State) ->
+    {keep_state, State,
+     {reply, From, {error, {bad_request, no_expectations, Event}}}}.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+-spec deranged(gen_statem:event_type(),
+               EventData :: term(),
+               statedata()) ->
+                    gen_statem:state_callback_result(gen_statem:reply_action()).
+
+deranged({call, From}, verify, State = #state{ error = Error }) ->
+    {stop_and_reply, normal, {reply, From, Error}, State};
+
+deranged({call, From}, await_expectations, State = #state{ error = Error }) ->
+    {stop_and_reply, normal, {reply, From, Error}, State};
+
+deranged({call, From}, {await, _}, State) ->
+    {keep_state, State, {reply, From, {error, mock_deranged}}};
+
+deranged({call, From}, {invokation, _M, _F, _A, _IPid}, State) ->
+    {keep_state, State, {reply, From, {'$em_error', mock_deranged}}};
+
+deranged({call, From}, get_call_log, State) ->
+    {keep_state, State,
+     {reply, From, lists:reverse(State#state.call_log)}};
+
+deranged({call, From}, Event, State) ->
+    {keep_state, State, {reply, From, {error, {bad_request, deranged, Event}}}}.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
 -spec terminate(Reason :: term(), StateName :: atom(),
                 StateData :: statedata()) -> no_return().
-terminate(Reason, _StateName, State = #state{test_proc = TestProc}) ->
-    unload_mock_modules(State),
-    exit(TestProc, Reason).
+terminate(_Reason, _StateName, State) ->
+    try unload_mock_modules(State) catch _:_ -> ok end.
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -584,44 +721,6 @@ terminate(Reason, _StateName, State = #state{test_proc = TestProc}) ->
                          {ok, NextState :: atom(), NewStateData :: statedata()}.
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
-
-%%------------------------------------------------------------------------------
-%% @private
-%%------------------------------------------------------------------------------
--spec handle_sync_event(Event :: term(), From :: term(), StateName :: atom(),
-                        StateData :: statedata()) ->
-                               {stop, normal, ok, NewStateData :: statedata()}
-                                   | {next_state, StateName :: atom(),
-                                      NewStateData :: statedata()}.
-handle_sync_event({await, H}, From, StateName, State) ->
-    {next_state, StateName, add_invokation_listener(From, H, State)};
-handle_sync_event(await_expectations, _From, no_expectations, State) ->
-    {stop, normal, ok, State};
-handle_sync_event(await_expectations, From, StateName,
-                  State =  #state{await_invokations_reply = nothing}) ->
-    {next_state, StateName, State#state{await_invokations_reply = {just, From}}};
-handle_sync_event(get_call_log, _From, StateName, State) ->
-	{reply, lists:reverse(State#state.call_log), StateName, State};
-handle_sync_event(_Evt, _From, _StateName, State) ->
-    {stop, normal, ok, State}.
-
-%%------------------------------------------------------------------------------
-%% @private
-%%------------------------------------------------------------------------------
--spec handle_info(Info :: term(), StateName :: atom(),
-                  StateData :: statedata()) ->
-                         {stop, normal, NewStateData :: statedata()}.
-handle_info(_Info, _StateName, State) ->
-    {stop, normal, State}.
-
-%%------------------------------------------------------------------------------
-%% @private
-%%------------------------------------------------------------------------------
--spec handle_event(Msg :: term(), StateName :: atom(),
-                   StateData :: statedata()) ->
-                          {stop, normal, NewStateData :: statedata()}.
-handle_event(_Msg, _StateName, State) ->
-    {stop, normal, State}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% api for generated mock code
@@ -633,12 +732,19 @@ handle_event(_Msg, _StateName, State) ->
 -spec invoke(M :: term(), Mod :: term(), Fun :: fun(), Args :: list()) ->
                     {Value :: term()}.
 invoke(M, Mod, Fun, Args) ->
-    case gen_fsm:sync_send_event(M, {invokation, Mod, Fun, Args, self()}) of
-        {return, Value} ->
-            Value;
-        {function, F} ->
-            F(Args)
-    end.
+    Trace = erlang:get_stacktrace(),
+    try io:format("~nEM: ~w:~w ~p",[Mod,Fun, Args]) catch _:_ -> ok end,
+    Rv = case gen_statem:call(M, {invokation, Mod, Fun, Args, self()}, infinity) of
+             {return, Value} ->
+                 Value;
+             {'$em_error' , WTF} ->
+                 (catch io:format(" *ERROR* ->  ~p~nAT: ~p~n~n",[WTF, Trace])),
+                 exit({mock_error, WTF});
+             {function, F} ->
+                 F(Args)
+         end,
+    try io:format(" ->  ~p~n",[Rv]) catch _:_ -> ok end,
+    Rv.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% internal functions
@@ -648,11 +754,11 @@ invoke(M, Mod, Fun, Args) ->
 %%------------------------------------------------------------------------------
 unload_mock_modules(#state{mocked_modules = MMs}) ->
     [begin
-   code:purge(Mod),
+         code:purge(Mod),
 	 code:delete(Mod),
 	 code:purge(Mod),
          case MaybeBin of
-              nothing ->
+             nothing ->
                  ignore;
              {just, {Mod, CoverCompiledBinary}} ->
                  code:load_binary(Mod, cover_compiled, CoverCompiledBinary)
@@ -663,18 +769,21 @@ unload_mock_modules(#state{mocked_modules = MMs}) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-install_mock_modules(#state{strict = ExpectationsStrict,
-                            stub = ExpectationsStub,
-			    blacklist = BlackList}) ->
+load_mock_modules(State = #state{ strict    = ExpectationsStrict,
+                                  stub      = ExpectationsStub,
+                                  blacklist = BlackList }) ->
     Expectations = ExpectationsStub ++ ExpectationsStrict,
-    ModulesToMock = lists:usort([M || #expectation{m = M} <- Expectations] ++ BlackList),
+    ExpectationModules = [M || #expectation{m = M} <- Expectations],
+    ModulesToMock = lists:usort(ExpectationModules ++ BlackList),
     assert_not_mocked(ModulesToMock),
-    [install_mock_module(M, Expectations) || M <- ModulesToMock].
+    [check_func(Ex) || Ex <- Expectations],
+    MockedModules = [load_mock_module(M, Expectations) || M <- ModulesToMock],
+    State#state{ mocked_modules = MockedModules }.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-install_mock_module(Mod, Expectations) ->
+load_mock_module(Mod, Expectations) ->
     MaybeBin = get_cover_compiled_binary(Mod),
     ModHeaderSyn = [erl_syntax:attribute(erl_syntax:atom(module),
 					 [erl_syntax:atom(Mod)]),
@@ -684,8 +793,9 @@ install_mock_module(Mod, Expectations) ->
                                          [erl_syntax:list(
                                             [erl_syntax:atom(export_all)])])],
     Funs = lists:usort(
-             [{F, length(A)} || #expectation{m = M, f = F, a = A} <- Expectations,
-                                M == Mod]),
+             [{F, length(A)} ||
+                 #expectation{ m = M, f = F, a = A } <- Expectations,
+                 M == Mod]),
     FunFormsSyn = [mock_fun_syn(Mod, F, A) || {F, A} <- Funs],
 
     {ok, Mod, Code} =
@@ -738,6 +848,12 @@ body_syn(Mod, FunSyn, ArgsSyn) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+prepare_strict_invocations(S = #state{ strict = Strict }) ->
+    S#state{ strict = lists:reverse(Strict) }.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
 check_args(Args, ArgSpecs, InvokationPid) ->
     try
         [begin
@@ -769,28 +885,11 @@ check_args(Args, ArgSpecs, InvokationPid) ->
          end
          || {I, A, E} <- lists:zip3(lists:seq(1, length(Args)),
                                     Args,
-                                    ArgSpecs)] of
-        _ ->
-            true
+                                    ArgSpecs)]
+    of
+        _ -> true
     catch
-        _:E ->
-            E
-    end.
-
-%%------------------------------------------------------------------------------
-%% @private
-%%------------------------------------------------------------------------------
-handle_stub_invokation({invokation, Mod, Fun, Args, IPid}, Stubs) ->
-    case [MatchingStub
-          || MatchingStub = #expectation {m = M, f = F, a = A} <- Stubs,
-             M == Mod, F == Fun, length(Args) == length(A),
-             check_args(Args, A, IPid) == true] of
-
-        [#expectation{answer = Answer}|_] ->
-            {ok, Answer};
-
-        _ ->
-            error
+        E -> E
     end.
 
 %%------------------------------------------------------------------------------
@@ -819,24 +918,28 @@ get_cover_compiled_binary(Mod) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-add_invokation_listener(From, Ref, State = #state{strict=Strict,
+-spec add_invokation_listener(gen_statem:from(), Ref :: term(), statedata()) ->
+    {statedata(), [gen_statem:reply_action()]}.
+
+add_invokation_listener(From, Ref, State = #state{strict     = Strict,
                                                   strict_log = StrictSucc}) ->
     %% if the invokation does not exist, check the strict_history
-    case lists:keyfind(Ref, 2, Strict) of
+    case lists:keyfind(Ref, #expectation.id, Strict) of
         false ->
-            case lists:keyfind(Ref, 2, StrictSucc) of
+            case lists:keyfind(Ref, #strict_log.eref, StrictSucc) of
                 false ->
-                    gen_fsm:reply(From, {error, invalid_handle});
+                    {State, [{reply, From, {error, invalid_handle}}]};
 
-                {strict_log, _ERef, IPid, Args} ->
-                    gen_fsm:reply(From, {success, IPid, Args})
-            end,
-            State;
+                #strict_log{ args = Args,
+                             ipid = IPid
+                           } ->
+                    {State, [{reply, From, {success, IPid, Args}}]}
+            end;
 
         E = #expectation{listeners = Ls} ->
             NewE = E#expectation{listeners = [From|Ls]},
             NewStrict = lists:keyreplace(Ref, 2, Strict, NewE),
-            State#state{strict = NewStrict}
+            {State#state{strict = NewStrict}, []}
     end.
 
 %%------------------------------------------------------------------------------
@@ -862,3 +965,195 @@ assert_not_mocked_(Mod) ->
         _:_ ->
             ok
     end.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+check_func(#expectation{m = Mod, f = Fun, a = Args}) ->
+    code:purge(Mod),
+    code:delete(Mod),
+    code:purge(Mod),
+    case code:load_file(Mod) of
+        {module, Mod} ->
+            case erlang:function_exported(Mod, Fun, length(Args)) of
+                false ->
+                    throw({'_______________em_invalid_mock_program_______________',
+                           lists:flatten(
+                             io_lib:format(
+                               "erly_mock: mocked function not exported: ~w:~w/~w",
+                               [Mod, Fun, length(Args)])),
+                           Args});
+                true ->
+                    ok
+            end;
+
+        _ ->
+            ok
+    end.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+get_next_expectations(#state{strict = Es, stub = StubEs}) ->
+    heads_by_group_tag(Es) ++ StubEs.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+heads_by_group_tag(Es) ->
+    lists:foldl(fun
+                   (#expectation{g = EG}, Acc = [#expectation{g = AG}|_])
+                      when EG =:= AG ->
+                        Acc;
+
+                    (E, Acc) ->
+                        [E|Acc]
+                end,
+                [],
+                lists:keysort(#expectation.g, Es)).
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+find_matching_expectation(I, Hints, []) ->
+    {error, {unexpected_invokation, I, Hints}};
+
+find_matching_expectation(I = {invokation, Mod, Fun, Args, IPid},
+                          Hints,
+                          [E|RestEs]) ->
+    case E of
+        #expectation{m = Mod,
+                     f = Fun,
+                     a = EArgs}
+        when
+              length(EArgs) == length(Args) ->
+            case check_args(Args, EArgs, IPid) of
+                true ->
+                    {ok, E};
+
+                {error, Index, Expected, Actual} ->
+                    Hint = {parameter_mismatch,
+                            {parameter, Index},
+                            {expected, Expected},
+                            {actual, Actual},
+                            E},
+                    find_matching_expectation(I, [Hint|Hints], RestEs)
+            end;
+
+        _ ->
+            Hint = {mfa_mismatch, E},
+            find_matching_expectation(I, [Hint|Hints], RestEs)
+    end.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+-spec answer_invokation(Invokation :: term(),
+                        #expectation{},
+                        gen_statem:from()) ->
+    [gen_statem:reply_action()].
+
+answer_invokation({invokation, _Mod, _Fun, Args, IPid},
+                  #expectation{answer    = Answer,
+                               listeners = Listeners},
+                  From) ->
+    [{reply, From, Answer}|
+      [{reply, Listener, {success, IPid, Args}} || Listener <- Listeners]].
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+remove_expectation(#expectation{id = EId},
+                   St = #state{strict = Stricts}) ->
+
+    St#state {
+      strict = lists:keydelete(
+                 EId,
+                 #expectation.id,
+                 Stricts)
+     }.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+log_invokation({invokation, Mod, Fun, Args, IPid},
+               #expectation {
+                 id = EId,
+                 g = GroupTag,
+                 answer = Answer
+                },
+               St = #state{ strict_log = Log,
+                            call_log   = CallLog }) ->
+    St#state {
+      strict_log = [#strict_log {
+                      eref = EId,
+                       grpt = GroupTag,
+                       ipid = IPid,
+                       args = Args
+                      } | Log],
+      call_log = [{Mod, Fun, Args, Answer} | CallLog]}.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+-spec stop_or_continue_replay([gen_statem:reply_action()], statedata()) ->
+        gen_statem:event_handler_result(no_expectations).
+stop_or_continue_replay(
+                    ReplyActions,
+                    St = #state{
+                                strict      = Expectations,
+                                on_finished = OnFinished
+                               }) ->
+    case {Expectations, OnFinished} of
+
+        {[], undefined} ->
+            {next_state, no_expectations, St,
+             [reset_invokation_timer()|ReplyActions]};
+
+        {[_|_], _} ->
+            {keep_state, St, [start_invokation_timer(St)|ReplyActions]};
+
+        {[], OnFinished} ->
+            {stop_and_reply, normal, ReplyActions++[{reply, OnFinished, ok}],
+             St}
+    end.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+set_invokation_timeout(InvTimeout, S = #state{}) ->
+    S#state{ inv_to = InvTimeout }.
+
+-define(set_invokation_timeout_action(T),
+        {{timeout, invokation_timeout}, T, invokation_timeout}).
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+-spec start_invokation_timer(statedata()) -> gen_statem:enter_action().
+start_invokation_timer(#state{ inv_to = InvTo }) ->
+    ?set_invokation_timeout_action(InvTo).
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+-spec reset_invokation_timer() -> gen_statem:enter_action().
+reset_invokation_timer() -> ?set_invokation_timeout_action(infinity).
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+-spec enter_deranged([gen_statem:reply_action()], Error :: term(), #state{}) ->
+                       gen_statem:event_handler_result(deranged).
+
+enter_deranged(ReplyActions, What, State = #state{ error  = no_error,
+                                                   strict = Strict}) ->
+    {next_state,
+     deranged,
+     State#state{ error = What },
+     [reset_invokation_timer()
+     |
+        [{reply, L, {error, mock_deranged}} ||
+                #expectation{ listeners = Ls } <- Strict,
+                L <- Ls]
+        ++ ReplyActions]}.

@@ -1,22 +1,17 @@
-REBAR="./rebar"
+REBAR="./rebar3"
 SHELL = /bin/sh
 
 .DEFAULT_GOAL := compile
 
-.PHONY = compile clean test edoc dep
-
-dep:
-	$(REBAR) get-deps
-	$(REBAR) update-deps
-	
+.PHONY = compile clean test edoc dialyzer
 
 edoc:
-	$(REBAR) doc skip_deps=true
-	git checkout gh-pages	
+	$(REBAR) edoc
+	git checkout gh-pages
 	mv doc/*.html .
 	mv doc/*.css .
 	mv doc/*.png .
-	git add . 
+	git add .
 	git commit -m "Update auto-generated E-Doc"
 	git push origin gh-pages
 	git checkout master
@@ -25,10 +20,14 @@ compile:
 	$(REBAR) compile
 
 eunit: compile clean
-	$(REBAR) skip_deps=true eunit
+	$(REBAR) eunit
+
+dialyzer: eunit
+	$(REBAR) dialyzer
 
 clean:
 	$(REBAR) clean
 	rm -f doc/*.html
 	rm -f doc/*.css
 	rm -f doc/*.png
+	rm -f TEST-*.xml
