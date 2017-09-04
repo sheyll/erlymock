@@ -5,16 +5,9 @@ SHELL = /bin/sh
 
 .PHONY = compile clean test gh-pages dialyzer
 
-gh-pages:
-	$(REBAR) edoc
-	git checkout gh-pages
-	mv doc/*.html .
-	mv doc/*.css .
-	mv doc/*.png .
-	git add .
-	git commit -m "Update auto-generated E-Doc"
-	git push origin gh-pages
-	git checkout master
+publish: dialyzer
+	$(REBAR) hex publish
+	$(REBAR) hex docs
 
 compile:
 	$(REBAR) compile
