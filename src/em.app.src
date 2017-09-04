@@ -6,4 +6,8 @@
    {included_applications, []},
    {applications, [kernel, stdlib]},
    {env, []},
-   {start_phases, []}]}.
+   {start_phases, []},
+   {maintainers, ["Sven Heyll"]},
+   {licenses, ["MIT"]},
+   {links, [{"Github", "https://github.com/sheyll/erlymock"}]}
+   ]}.
