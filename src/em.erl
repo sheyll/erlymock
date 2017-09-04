@@ -435,21 +435,6 @@ any() ->
 zelf() ->
     '$$em zelf$$'.
 
-%%------------------------------------------------------------------------------
-%% @doc
-%% retrieve a list of functions since the creation of the module.
-%% <p>The log will track the calls regardless whether they are done for a strict
-%% or stub function. In case the answers are not evaluated, as an function used
-%% here may have side effects and depend on the process in which it is evaluated.
-%% </p>
-%% @end
-%%------------------------------------------------------------------------------
--spec call_log(M :: term()) ->  [{Mod :: atom(),
-								  Func :: atom(),
-								  Args :: [term()],
-								  Answer :: term()}].
-call_log(M) -> gen_fsm:sync_send_all_state_event(M, get_call_log).
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% internal state
 %%

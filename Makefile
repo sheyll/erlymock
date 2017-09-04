@@ -3,9 +3,9 @@ SHELL = /bin/sh
 
 .DEFAULT_GOAL := compile
 
-.PHONY = compile clean test edoc dialyzer
+.PHONY = compile clean test gh-pages dialyzer
 
-edoc:
+gh-pages:
 	$(REBAR) edoc
 	git checkout gh-pages
 	mv doc/*.html .
@@ -19,10 +19,10 @@ edoc:
 compile:
 	$(REBAR) compile
 
-eunit: compile clean
+test: clean compile dialyzer
 	$(REBAR) eunit
 
-dialyzer: eunit
+dialyzer: compile
 	$(REBAR) dialyzer
 
 clean:
