@@ -6,3 +6,4 @@ doc/
 _build/
 rebar.lock
 TEST-*.xml
+/.markdown-preview.html
