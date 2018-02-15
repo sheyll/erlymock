@@ -3,20 +3,22 @@ SHELL = /bin/sh
 
 .DEFAULT_GOAL := compile
 
-.PHONY = compile clean test gh-pages dialyzer
+.PHONY: publish doc test dialyzer compile clean
 
-publish: dialyzer
+publish: clean compile dialyzer test doc
 	$(REBAR) hex publish
+
+doc: 
 	$(REBAR) hex docs
 
-compile:
-	$(REBAR) compile
-
-test: clean compile dialyzer
+test: compile
 	$(REBAR) eunit
 
 dialyzer: compile
 	$(REBAR) dialyzer
+
+compile:
+	$(REBAR) compile
 
 clean:
 	$(REBAR) clean
