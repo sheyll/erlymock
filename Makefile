@@ -3,12 +3,10 @@ SHELL = /bin/sh
 
 .DEFAULT_GOAL := compile
 
-.PHONY: publish doc test dialyzer compile clean
+.PHONY: publish test dialyzer compile clean
 
-publish: clean compile dialyzer test doc
+publish: clean compile dialyzer test
 	$(REBAR) hex publish
-
-doc: 
 	$(REBAR) hex docs
 
 test: compile
