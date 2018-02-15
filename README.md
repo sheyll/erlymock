@@ -9,8 +9,8 @@
 
 `prouction.erl`:
 
-    read_a_book({isbn, Isbn}) ->
-        {ok, Book} = library:lookup_isbn(Isbn),
+    find_and_read_book(Isbn) ->
+        {ok, Book} = library:lookup({isbn, Isbn}),
         media:view_book(Book).
 
 `production_test.erl`:
@@ -18,16 +18,14 @@
     take_book_test() ->
         Mock = em:new(),
         ISBN = '978-3-596-17577-2',
-        BookQuery = {isbn, ISBN},
-        Book = some_book_id,
 
         %% expectations:
-        em:strict(Mock, library, lookup_isbn, [ISBN], {return, {ok, Book}}).
-        em:strict(Mock, media, view_book, [Book], {return, ok}),
+        em:strict(Mock, library, lookup, [{isbn, ISBN}], {return, {ok, some_book_id}}).
+        em:strict(Mock, media, view_book, [some_book_id], {return, ok}),
         em:replay(Mock),
 
         %% Run code under test:
-        production:find_and_view(BookQuery),
+        production:find_and_read_book(ISBN),
         %% assertions:
         em:verify(Mock).
 
