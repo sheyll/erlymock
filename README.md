@@ -2,9 +2,8 @@
 
 **Easy to use mocking library for unit testing**
 
-* **[Documentation](https://hexdocs.pm/em)**
-* **[Hex-Installation](https://hex.pm/packages/em)**
-* **[GitHub](https://github.com/sheyll/erlymock)**
+* **[API Documentation](https://hexdocs.pm/em)**
+* **[Rebar3 (hex) Installation](https://hex.pm/packages/em)**
 
 ## Example
 
@@ -39,4 +38,4 @@
 
 Add this to your `rebar.config`:
 
-    {em, "7.0.0"}
+    {em, "7.0.1"}
