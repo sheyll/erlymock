@@ -82,8 +82,9 @@
 
 %% public API ---
 -export([new/0,
+         new/1,
          new_groups/2,
-	     nothing/2,
+         nothing/2,
          strict/4,
          strict/5,
          any/0,
@@ -95,7 +96,7 @@
          await/2,
          await_expectations/1,
          verify/1,
-		 call_log/1]).
+         call_log/1]).
 
 %% gen_statem callbacks ---
 -export([programming/3,
@@ -111,7 +112,9 @@
 %% !!!NEVER CALL THIS FUNCTION!!! ---
 -export([invoke/4]).
 
--export_type([group/0, group_tag/0, timeout_millis/0]).
+-export_type([group/0, group_tag/0, timeout_millis/0, load_mode/0]).
+
+-include_lib("em/include/em.hrl").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% important types
@@ -134,6 +137,13 @@
 %%------------------------------------------------------------------------------
 -type answer() :: {function, fun(([any()]) -> any())}
                   | {return, any()} .
+
+%%------------------------------------------------------------------------------
+%% Determine if loading of modules happens immediately and fails if another
+%% test loaded the modules, or if the process will wait until the modules can
+%% be loaded.
+%%------------------------------------------------------------------------------
+-type load_mode() :: wait_for_modules | nonblocking.
 
 %%------------------------------------------------------------------------------
 %% A group is a pair with a tag for a group and a mock process.
@@ -161,12 +171,36 @@
 %% restored.</p> <p>When the process that started the mock exits, the mock
 %% automatically cleans up and exits.</p> <p>After new() the mock is in
 %% 'programming' state.</p>
+%%
+%% This is equal to `new(wait_for_modules)'.
+%%
+%% @see new/1
+%%
 %% @end
 %%------------------------------------------------------------------------------
 -spec new() ->
                  group().
 new() ->
-    {ok, M} = gen_statem:start_link(?MODULE, [erlang:self()], []),
+    new(wait_for_modules).
+
+%%------------------------------------------------------------------------------
+%% @doc
+%% Like `new/0' but allow control over how the mock-module loading is done.
+%%
+%% * `wait_for_modules' mean that `replay/1' blocks until no other `em' claims
+%%   any of the modules locked by this mock.
+%% * `nonblocking' mean that `replay/1' tries to claim all of the modules needed
+%%    by this mock, and fails with `{error, Reason}' if a module is currently
+%%   mocked by another process.
+%%
+%% @see new/0
+%% @since 7.1.0
+%% @end
+%%------------------------------------------------------------------------------
+-spec new(load_mode()) ->
+                 group().
+new(Mode) ->
+    {ok, M} = gen_statem:start_link(?MODULE, {erlang:self(), Mode}, []),
     RootTag = {root, make_ref()},
     {group, M, RootTag}.
 
@@ -467,12 +501,11 @@ zelf() ->
          blacklist        :: [atom()],
          mocked_modules   :: [{atom(), {just, term()}|nothing}],
          on_finished      :: term(), % GenFsmFrom
-         error = no_error :: no_error | term()
+         error = no_error :: no_error | term(),
+         mode = wait_for_modules :: load_mode()
         }).
 
 -type statedata() :: #state{}.
-
--define(ERLYMOCK_COMPILED, erlymock_compiled).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% gen_statem callbacks
@@ -481,10 +514,11 @@ zelf() ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
--spec init([TestProc :: term()]) ->
+-spec init({TestProc :: term(), load_mode()}) ->
                   {ok, atom(), StateData :: statedata()}.
-init([TestProc]) ->
+init({TestProc, LoadMode}) ->
     process_flag(sensitive, true),
+    process_flag(trap_exit, true),
     erlang:trace(self(), false, [all]),
     {ok,
      programming,
@@ -496,7 +530,8 @@ init([TestProc]) ->
         stub = [],
         call_log =[],
         blacklist = [],
-        mocked_modules = []}}.
+        mocked_modules = [],
+        mode = LoadMode}}.
 
 
 %%------------------------------------------------------------------------------
@@ -564,7 +599,7 @@ programming({call, From}, get_call_log, State) ->
     {keep_state_and_data,
      {reply, From, lists:reverse(State#state.call_log)}};
 
-programming({call, From}, Event, State) ->
+programming({call, From}, Event, _State) ->
     {keep_state_and_data,
      {reply, From, {error, {bad_request, programming, Event}}}}.
 
@@ -741,9 +776,7 @@ invoke(M, Mod, Fun, Args) ->
 %%------------------------------------------------------------------------------
 unload_mock_modules(#state{mocked_modules = MMs}) ->
     [begin
-         code:purge(Mod),
-	 code:delete(Mod),
-	 code:purge(Mod),
+         really_delete(Mod),
          case MaybeBin of
              nothing ->
                  ignore;
@@ -758,14 +791,49 @@ unload_mock_modules(#state{mocked_modules = MMs}) ->
 %%------------------------------------------------------------------------------
 load_mock_modules(State = #state{ strict    = ExpectationsStrict,
                                   stub      = ExpectationsStub,
-                                  blacklist = BlackList }) ->
+                                  blacklist = BlackList,
+                                  mode      = Mode}) ->
     Expectations = ExpectationsStub ++ ExpectationsStrict,
-    ExpectationModules = [M || #expectation{m = M} <- Expectations],
+    ExpectationModules = lists:usort([M || #expectation{m = M} <- Expectations]),
     ModulesToMock = lists:usort(ExpectationModules ++ BlackList),
-    assert_not_mocked(ModulesToMock),
-    [check_func(Ex) || Ex <- Expectations],
-    MockedModules = [load_mock_module(M, Expectations) || M <- ModulesToMock],
+    case Mode of
+        wait_for_modules ->
+            ok = em_mocking_queue:enqueue_and_wait(erlang:self(), ModulesToMock);
+        nonblocking ->
+            ok = em_mocking_queue:lock_immediately(erlang:self(), ExpectationModules)
+    end,
+    MockedModules =
+        [begin
+             ModExpectations = [E || E=#expectation{m = Me} <- Expectations,
+                                     M =:= Me],
+             assert_not_mocked(M),
+             case load_original_module(M) of
+                 existing_module ->
+                     [assert_mocked_function_exists(E)
+                      || E <- ModExpectations];
+                 fantasy_module ->
+                     ok
+             end,
+             load_mock_module(M, ModExpectations)
+         end || M <- ExpectationModules],
     State#state{ mocked_modules = MockedModules }.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+assert_not_mocked(Mod) ->
+    try Mod:module_info(attributes) of
+        Attrs ->
+            case lists:keyfind(?ERLYMOCK_COMPILED, 1 , Attrs) of
+                false ->
+                    ok;
+                _ ->
+                    throw({em_error_module_already_mocked, Mod})
+            end
+    catch
+        _:_ ->
+            ok
+    end.
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -788,13 +856,25 @@ load_mock_module(Mod, Expectations) ->
     {ok, Mod, Code} =
         compile:forms([erl_syntax:revert(F)
                        || F <- ModHeaderSyn ++ FunFormsSyn]),
-
-    code:purge(Mod),
-    code:delete(Mod),
-    code:purge(Mod),
-    {module, _} = load_module(Mod, Code),
+    really_delete(Mod),
+    FName = lists:flatten(io_lib:format("~w.beam", [Mod])),
+    {module, _} = code:load_binary(Mod, FName, Code),
     {Mod, MaybeBin}.
 
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+really_delete(Mod) ->
+    code:purge(Mod),
+    code:delete(Mod),
+    code:purge(Mod).
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+really_purge(Mod) -> really_purge(Mod, code:purge(Mod)).
+really_purge(_, true) -> true;
+really_purge(Mod, false) -> really_purge(Mod).
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -928,40 +1008,22 @@ add_invokation_listener(From, Ref, State = #state{strict     = Strict,
             NewStrict = lists:keyreplace(Ref, 2, Strict, NewE),
             {State#state{strict = NewStrict}, []}
     end.
-
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-assert_not_mocked(Mods) ->
-    [case assert_not_mocked_(M) of
-         ok -> ok;
-         {error, {already_mocked, Mod}} ->
-             throw({em_error_module_already_mocked, Mod})
-     end || M <- Mods],
-    ok.
-assert_not_mocked_(Mod) ->
-    try Mod:module_info(attributes) of
-        Attrs ->
-            case lists:keyfind(?ERLYMOCK_COMPILED, 1 , Attrs) of
-                false ->
-                    ok;
-                _ ->
-                    {error, {already_mocked, Mod}}
-            end
-    catch
-        _:_ ->
-            ok
+load_original_module(Mod) ->
+    really_delete(Mod),
+    case code:load_file(Mod) of
+        {module, Mod} ->
+            existing_module;
+        _ ->
+            fantasy_module
     end.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-check_func(#expectation{m = Mod, f = Fun, a = Args}) ->
-    code:purge(Mod),
-    code:delete(Mod),
-    code:purge(Mod),
-    case code:load_file(Mod) of
-        {module, Mod} ->
+assert_mocked_function_exists(#expectation{m = Mod, f = Fun, a = Args}) ->
             case erlang:function_exported(Mod, Fun, length(Args)) of
                 false ->
                     throw({'_______________em_invalid_mock_program_______________',
@@ -972,11 +1034,7 @@ check_func(#expectation{m = Mod, f = Fun, a = Args}) ->
                            Args});
                 true ->
                     ok
-            end;
-
-        _ ->
-            ok
-    end.
+            end.
 
 %%------------------------------------------------------------------------------
 %% @private
