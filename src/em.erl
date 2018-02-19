@@ -872,13 +872,6 @@ really_delete(Mod) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-really_purge(Mod) -> really_purge(Mod, code:purge(Mod)).
-really_purge(_, true) -> true;
-really_purge(Mod, false) -> really_purge(Mod).
-
-%%------------------------------------------------------------------------------
-%% @private
-%%------------------------------------------------------------------------------
 mock_fun_syn(Mod, F, Args) ->
     ArgsSyn = var_list_syn(Args),
     FunSyn = erl_syntax:atom(F),
