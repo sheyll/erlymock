@@ -561,11 +561,12 @@ programming({call, From},
      |[start_invokation_timer(NextState)||NextStateName == replaying]]};
 
 programming({call, From}, get_call_log, State) ->
-    {keep_state, State,
+    {keep_state_and_data,
      {reply, From, lists:reverse(State#state.call_log)}};
 
 programming({call, From}, Event, State) ->
-    {keep_state, State, {reply, From, {error, {bad_request, programming, Event}}}}.
+    {keep_state_and_data,
+     {reply, From, {error, {bad_request, programming, Event}}}}.
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -611,11 +612,11 @@ replaying({call, From},
     {keep_state, State#state{ on_finished = From }};
 
 replaying({call, From}, get_call_log, State) ->
-    {keep_state, State,
+    {keep_state_and_data,
      {reply, From, lists:reverse(State#state.call_log)}};
 
-replaying({call, From}, Event, State) ->
-    {keep_state, State, {reply, From, {error, {bad_request, replaying, Event}}}}.
+replaying({call, From}, Event, _) ->
+    {keep_state_and_data, {reply, From, {error, {bad_request, replaying, Event}}}}.
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -656,11 +657,11 @@ no_expectations({call, From}, {await, H}, State) ->
     {keep_state, NewState, ReplyActions};
 
 no_expectations({call, From}, get_call_log, State) ->
-    {keep_state, State,
+    {keep_state_and_data,
      {reply, From, lists:reverse(State#state.call_log)}};
 
-no_expectations({call, From}, Event, State) ->
-    {keep_state, State,
+no_expectations({call, From}, Event, _) ->
+    {keep_state_and_data,
      {reply, From, {error, {bad_request, no_expectations, Event}}}}.
 
 %%------------------------------------------------------------------------------
@@ -677,18 +678,19 @@ deranged({call, From}, verify, State = #state{ error = Error }) ->
 deranged({call, From}, await_expectations, State = #state{ error = Error }) ->
     {stop_and_reply, normal, {reply, From, Error}, State};
 
-deranged({call, From}, {await, _}, State) ->
-    {keep_state, State, {reply, From, {error, mock_deranged}}};
+deranged({call, From}, {await, _}, _) ->
+    {keep_state_and_data, {reply, From, {error, mock_deranged}}};
 
-deranged({call, From}, {invokation, _M, _F, _A, _IPid}, State) ->
-    {keep_state, State, {reply, From, {'$em_error', mock_deranged}}};
+deranged({call, From}, {invokation, _M, _F, _A, _IPid}, _) ->
+    {keep_state_and_data, {reply, From, {'$em_error', mock_deranged}}};
 
 deranged({call, From}, get_call_log, State) ->
-    {keep_state, State,
+    {keep_state_and_data,
      {reply, From, lists:reverse(State#state.call_log)}};
 
-deranged({call, From}, Event, State) ->
-    {keep_state, State, {reply, From, {error, {bad_request, deranged, Event}}}}.
+deranged({call, From}, Event, _) ->
+    {keep_state_and_data,
+     {reply, From, {error, {bad_request, deranged, Event}}}}.
 
 %%------------------------------------------------------------------------------
 %% @private
