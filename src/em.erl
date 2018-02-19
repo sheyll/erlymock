@@ -187,11 +187,11 @@ new() ->
 %% @doc
 %% Like `new/0' but allow control over how the mock-module loading is done.
 %%
-%% * `wait_for_modules' mean that `replay/1' blocks until no other `em' claims
-%%   any of the modules locked by this mock.
-%% * `nonblocking' mean that `replay/1' tries to claim all of the modules needed
-%%    by this mock, and fails with `{error, Reason}' if a module is currently
-%%   mocked by another process.
+%% `wait_for_modules' causes `replay/1' to block until no other process uses
+%% any of the modules required by this mock.
+%% `nonblocking' causes `replay/1' to try to claim all of the modules needed
+%% immediately, and fails with `{error, Reason}' if a module is currently mocked
+%% by another process.
 %%
 %% @see new/0
 %% @since 7.1.0
