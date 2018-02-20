@@ -1,5 +1,11 @@
 # Changelog
 
+## Version 7.2.1
+
+### Overview
+
+* Ensure that mocked modules are removed after mocking
+
 ## Version 7.2.0
 
 ### Overview

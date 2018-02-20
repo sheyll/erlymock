@@ -321,7 +321,7 @@ do_load(Mods) ->
 %% @private
 %%------------------------------------------------------------------------------
 do_restore(MockMods, BackupMods) ->
-    [really_delete(M) || {M,_,_} <- MockMods],
+    [really_delete(M) || M <- MockMods],
     do_load_atomically(BackupMods, 'failed to restore modules'),
     dbgLog("Modules Deleted: ~p~n", [MockMods]),
     dbgLog("Modules Restored: ~p~n", [[{B,F} || {B,F,_} <- BackupMods]]).
