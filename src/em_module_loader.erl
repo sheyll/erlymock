@@ -87,7 +87,7 @@
         {owner :: reference(),
          owner_pid :: pid(),
          mocks :: [module()],
-         backup :: [{module(), binary(), file:filename()}]}).
+         backup :: [{module(), file:filename(), binary()}]}).
 
 
 -record(loading_disabled,

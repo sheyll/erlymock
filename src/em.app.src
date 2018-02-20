@@ -1,6 +1,6 @@
 {application, em,
   [{description, "An EasyMock inspired mocking library for erlang."},
-   {vsn, "7.2.1"},
+   {vsn, "7.2.2"},
    {modules, [em, em_module_loader]},
    {registered, [em_module_loader]},
    {included_applications, []},

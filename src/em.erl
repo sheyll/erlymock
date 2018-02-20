@@ -184,7 +184,7 @@ lock() ->
 %% Release lock obtained by `lock()'.
 %% @end
 %% ------------------------------------------------------------------------------
--spec unlock() -> unlocked.
+-spec unlock() -> ok.
 unlock() ->
     em_module_loader:start(),
     ok = em_module_loader:enable_module_loading().
