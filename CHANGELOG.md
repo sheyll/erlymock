@@ -2,6 +2,13 @@
 
 ## Version 7.2.0
 
+### Overview
+
+* Simplify the internal module loading
+* Improve module loading stability
+
+### Details
+
 * Replace `em_mocking_queue` by `em_module_loader`
 * Discourage concurrent mocking
 * Fix the race condition introduced in 7.1.0
