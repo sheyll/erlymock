@@ -322,7 +322,7 @@ do_load(Mods) ->
 %%------------------------------------------------------------------------------
 do_restore(MockMods, BackupMods) ->
     [really_delete(M) || {M,_,_} <- MockMods],
-    do_load_atomically(BackupMods, 'failed to load restore modules'),
+    do_load_atomically(BackupMods, 'failed to restore modules'),
     dbgLog("Modules Deleted: ~p~n", [MockMods]),
     dbgLog("Modules Restored: ~p~n", [[{B,F} || {B,F,_} <- BackupMods]]).
 
@@ -408,11 +408,17 @@ assert_not_mocked(Mod) ->
 %% @private
 %%------------------------------------------------------------------------------
 do_load_atomically(Mods, ErrMsg) ->
-    case code:atomic_load(Mods) of
+    StickyDirs =
+        lists:usort([filename:dirname(F) || {M,F,_} <- Mods,
+                                            code:is_sticky(M)]),
+    [code:unstick_dir(D) || D <- StickyDirs],
+    Res = code:atomic_load(Mods),
+    [code:stick_dir(D) || D <- StickyDirs],
+    case Res of
         ok ->
             ok;
-        Error ->
-            throw({ErrMsg, Error})
+        Errors ->
+            throw({ErrMsg, Errors})
     end.
 
 

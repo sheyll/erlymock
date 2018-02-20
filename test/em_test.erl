@@ -532,3 +532,11 @@ generate_call_log_test() ->
 				  {some_mod, stub_fun, [a,b],{return, ok}}] when is_function(FuncTerm),
 				 em:call_log(M)),
 		em:verify(M).
+
+
+mock_timer_module_test() ->
+    M = em:new(),
+    em:strict(M, timer, sleep, [500]),
+    em:replay(M),
+    ?assertEqual(ok, timer:sleep(500)),
+    em:verify(M).

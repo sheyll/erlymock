@@ -684,11 +684,13 @@ no_expectations({call, From},
 
 no_expectations({call, From}, verify, State) ->
     dbgLog("[~w] Stopping : ~w~n", [self(), [no_expectations, verify]]),
-    {stop_and_reply, normal, {reply, From, ok}, State};
+    Res = em_module_loader:restore_modules(),
+    {stop_and_reply, normal, {reply, From, Res}, State};
 
 no_expectations({call, From}, await_expectations, State) ->
     dbgLog("[~w] Stopping : ~w~n", [self(), [no_expectations, await_expectations]]),
-    {stop_and_reply, normal, {reply, From, ok}, State};
+    Res = em_module_loader:restore_modules(),
+    {stop_and_reply, normal, {reply, From, Res}, State};
 
 no_expectations({call, From}, {await, H}, State) ->
     {NewState, ReplyActions} = add_invokation_listener(From, H, State),

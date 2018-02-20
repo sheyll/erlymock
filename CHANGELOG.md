@@ -8,3 +8,5 @@
 * Add `em:lock()' and `em:unlock()' to mark sections of code
   that would appreciate that no modules are mocked.
 * Hopefully fix #8
+* Respect `sticky_dir`
+* Add printf debugging profile `rebar3 as printf_debugging eunit`
