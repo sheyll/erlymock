@@ -52,9 +52,18 @@
 %%% Apart from that, it is very advisable to <b>only mock owned modules</b>
 %%% anyway.
 %%%
+%%% Also, mocking modules is an operation that mutates the whole erlang
+%%% virtual machine (more or less), therefore it is advisable to call
+%%% {@link lock/0} and {@link unlock/0} around a block
+%%% test code that relies on an intact set of modules, which are not
+%%% mocked.
+%%%
+%%% Note that all module loading by `em' is made sequential through a single
+%%% {@link em_module_loader} server.
+%%%
 %%% @end
 %%%-----------------------------------------------------------------------------
-%%% Copyright (c) 2011-2017 Sven Heyll
+%%% Copyright (c) 2011-2018 Sven Heyll
 %%%
 %%% Permission is hereby granted, free of charge, to any person obtaining a copy
 %%% of this software and associated documentation files (the "Software"), to
@@ -81,8 +90,9 @@
 -behaviour(gen_statem).
 
 %% public API ---
--export([new/0,
-         new/1,
+-export([lock/0,
+         unlock/0,
+         new/0,
          new_groups/2,
          nothing/2,
          strict/4,
@@ -112,7 +122,7 @@
 %% !!!NEVER CALL THIS FUNCTION!!! ---
 -export([invoke/4]).
 
--export_type([group/0, group_tag/0, timeout_millis/0, load_mode/0]).
+-export_type([group/0, group_tag/0, timeout_millis/0]).
 
 -include_lib("em/include/em.hrl").
 
@@ -139,13 +149,6 @@
                   | {return, any()} .
 
 %%------------------------------------------------------------------------------
-%% Determine if loading of modules happens immediately and fails if another
-%% test loaded the modules, or if the process will wait until the modules can
-%% be loaded.
-%%------------------------------------------------------------------------------
--type load_mode() :: wait_for_modules | nonblocking.
-
-%%------------------------------------------------------------------------------
 %% A group is a pair with a tag for a group and a mock process.
 %%------------------------------------------------------------------------------
 -type group_tag() :: {term(), reference()}.
@@ -160,6 +163,33 @@
 %%%% API
 %%
 
+%% When tests spawn processes, the chance arises that modules get mocked mocked
+%% while other processes use them. To prevent this, the test execution must be
+%% serialized with regard to module mocking. Use this function to take a global
+%% lock (also taken by {@link em:new/0}) to prevent any mocking activity until
+%% {@link em:unlock/0} is called. <b>NOTE: calling {@link em:new/0} will
+%% automatically take the global lock, and this function doesn't need to be
+%% called, although precautions have been made to such that {@link em:new/0}
+%% will not take the lock when the calling process already owns it.</b> The
+%% calling process is monitored and the lock is released when the process
+%% exists. @see unlock/0 @end
+%% ------------------------------------------------------------------------------
+-spec lock() -> ok.
+lock() ->
+    em_module_loader:start(),
+    ok = em_module_loader:disable_module_loading().
+
+%%------------------------------------------------------------------------------
+%% @doc
+%% Release lock obtained by `lock()'.
+%% @end
+%% ------------------------------------------------------------------------------
+-spec unlock() -> unlocked.
+unlock() ->
+    em_module_loader:start(),
+    ok = em_module_loader:enable_module_loading().
+
+
 %%------------------------------------------------------------------------------
 %% @doc
 %% Spawn a linked mock process and return the pid. <p>This is usually the
@@ -171,36 +201,12 @@
 %% restored.</p> <p>When the process that started the mock exits, the mock
 %% automatically cleans up and exits.</p> <p>After new() the mock is in
 %% 'programming' state.</p>
-%%
-%% This is equal to `new(wait_for_modules)'.
-%%
-%% @see new/1
-%%
 %% @end
 %%------------------------------------------------------------------------------
 -spec new() ->
                  group().
 new() ->
-    new(wait_for_modules).
-
-%%------------------------------------------------------------------------------
-%% @doc
-%% Like `new/0' but allow control over how the mock-module loading is done.
-%%
-%% `wait_for_modules' causes `replay/1' to block until no other process uses
-%% any of the modules required by this mock.
-%% `nonblocking' causes `replay/1' to try to claim all of the modules needed
-%% immediately, and fails with `{error, Reason}' if a module is currently mocked
-%% by another process.
-%%
-%% @see new/0
-%% @since 7.1.0
-%% @end
-%%------------------------------------------------------------------------------
--spec new(load_mode()) ->
-                 group().
-new(Mode) ->
-    {ok, M} = gen_statem:start_link(?MODULE, {erlang:self(), Mode}, []),
+    {ok, M} = gen_statem:start_link(?MODULE, {erlang:self()}, []),
     RootTag = {root, make_ref()},
     {group, M, RootTag}.
 
@@ -409,9 +415,8 @@ call_log({group, M, {root, _}}) ->
 %%------------------------------------------------------------------------------
 -spec await_expectations(group()) -> ok.
 await_expectations({group, M, {root, _}}) ->
-    case
-        gen_statem:call(M, await_expectations, infinity)
-    of
+    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ Stopped/Await~n", []),
+    case gen_statem:call(M, await_expectations, infinity) of
         ok ->
             ok;
 
@@ -431,9 +436,8 @@ await_expectations({group, M, {root, _}}) ->
 %%------------------------------------------------------------------------------
 -spec verify(group()) -> ok.
 verify({group, M, {root, _}}) ->
-    case
-        gen_statem:call(M, verify, infinity)
-    of
+    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ Stopped/Verified~n", []),
+    case gen_statem:call(M, verify, infinity) of
         ok ->
             ok;
 
@@ -499,10 +503,8 @@ zelf() ->
 						      Args :: [term()],
 						      Answer :: term()}],
          blacklist        :: [atom()],
-         mocked_modules   :: [{atom(), {just, term()}|nothing}],
          on_finished      :: term(), % GenFsmFrom
-         error = no_error :: no_error | term(),
-         mode = wait_for_modules :: load_mode()
+         error = no_error :: no_error | term()
         }).
 
 -type statedata() :: #state{}.
@@ -514,11 +516,11 @@ zelf() ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
--spec init({TestProc :: term(), load_mode()}) ->
+-spec init({TestProc :: term()}) ->
                   {ok, atom(), StateData :: statedata()}.
-init({TestProc, LoadMode}) ->
+init({TestProc}) ->
+    ok = em_module_loader:start(),
     process_flag(sensitive, true),
-    process_flag(trap_exit, true),
     erlang:trace(self(), false, [all]),
     {ok,
      programming,
@@ -529,9 +531,7 @@ init({TestProc, LoadMode}) ->
         strict_log = [],
         stub = [],
         call_log =[],
-        blacklist = [],
-        mocked_modules = [],
-        mode = LoadMode}}.
+        blacklist = []}}.
 
 
 %%------------------------------------------------------------------------------
@@ -582,18 +582,18 @@ programming({call, From},
 programming({call, From},
             {replay, InvTo},
             State) ->
-    NextState = load_mock_modules(
-                  prepare_strict_invocations(
-                      set_invokation_timeout(InvTo, State))),
-    NextStateName = case NextState#state.strict of
+    NewState = prepare_strict_invocations(
+                 set_invokation_timeout(InvTo, State)),
+    load_mock_modules(NewState),
+    NextStateName = case NewState#state.strict of
                         [] -> no_expectations;
                         _ -> replaying
                     end,
     {next_state,
      NextStateName,
-     NextState,
+     NewState,
      [{reply, From, ok}
-     |[start_invokation_timer(NextState)||NextStateName == replaying]]};
+     |[start_invokation_timer(NewState)||NextStateName == replaying]]};
 
 programming({call, From}, get_call_log, State) ->
     {keep_state_and_data,
@@ -635,6 +635,7 @@ replaying({call, From},
 
 replaying({call, From}, verify, State) ->
     Reason = {invokations_missing, State#state.strict},
+    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ Stopping : ~w~n", [Reason]),
     {stop_and_reply, normal, {reply, From, Reason}, State};
 
 replaying({call, From}, {await, H}, State) ->
@@ -682,9 +683,11 @@ no_expectations({call, From},
     end;
 
 no_expectations({call, From}, verify, State) ->
+    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ [~w] Stopping : ~w~n", [self(), [no_expectations, verify]]),
     {stop_and_reply, normal, {reply, From, ok}, State};
 
 no_expectations({call, From}, await_expectations, State) ->
+    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ [~w] Stopping : ~w~n", [self(), [no_expectations, await_expectations]]),
     {stop_and_reply, normal, {reply, From, ok}, State};
 
 no_expectations({call, From}, {await, H}, State) ->
@@ -708,9 +711,11 @@ no_expectations({call, From}, Event, _) ->
                     gen_statem:state_callback_result(gen_statem:reply_action()).
 
 deranged({call, From}, verify, State = #state{ error = Error }) ->
+    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ Stopping : ~w~n", [[deranged, verify]]),
     {stop_and_reply, normal, {reply, From, Error}, State};
 
 deranged({call, From}, await_expectations, State = #state{ error = Error }) ->
+    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ Stopping : ~w~n", [[deranged, await_expectations]]),
     {stop_and_reply, normal, {reply, From, Error}, State};
 
 deranged({call, From}, {await, _}, _) ->
@@ -732,8 +737,7 @@ deranged({call, From}, Event, _) ->
 %%------------------------------------------------------------------------------
 -spec terminate(Reason :: term(), StateName :: atom(),
                 StateData :: statedata()) -> no_return().
-terminate(_Reason, _StateName, State) ->
-    try unload_mock_modules(State) catch _:_ -> ok end.
+terminate(_Reason, _StateName, _State) -> void.
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -771,75 +775,43 @@ invoke(M, Mod, Fun, Args) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% internal functions
 %%
-%%------------------------------------------------------------------------------
-%% @private
-%%------------------------------------------------------------------------------
-unload_mock_modules(#state{mocked_modules = MMs}) ->
-    [begin
-         really_delete(Mod),
-         case MaybeBin of
-             nothing ->
-                 ignore;
-             {just, {Mod, CoverCompiledBinary}} ->
-                 code:load_binary(Mod, cover_compiled, CoverCompiledBinary)
-         end
-     end
-     || {Mod, MaybeBin} <- MMs].
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-load_mock_modules(State = #state{ strict    = ExpectationsStrict,
-                                  stub      = ExpectationsStub,
-                                  blacklist = BlackList,
-                                  mode      = Mode}) ->
+load_mock_modules(#state{ strict = ExpectationsStrict,
+                          stub   = ExpectationsStub}) ->
     Expectations = ExpectationsStub ++ ExpectationsStrict,
-    ExpectationModules = lists:usort([M || #expectation{m = M} <- Expectations]),
-    ModulesToMock = lists:usort(ExpectationModules ++ BlackList),
-    case Mode of
-        wait_for_modules ->
-            ok = em_mocking_queue:enqueue_and_wait(erlang:self(), ModulesToMock);
-        nonblocking ->
-            ok = em_mocking_queue:lock_immediately(erlang:self(), ExpectationModules)
-    end,
-    MockedModules =
+    ExpectationModules =
+        lists:usort([M || #expectation{m = M} <- Expectations]),
+    MockModules =
         [begin
-             ModExpectations = [E || E=#expectation{m = Me} <- Expectations,
-                                     M =:= Me],
-             assert_not_mocked(M),
-             case load_original_module(M) of
-                 existing_module ->
-                     [assert_mocked_function_exists(E)
-                      || E <- ModExpectations];
-                 fantasy_module ->
-                     ok
+             ModExpectations =
+                 [E || E=#expectation{m = Me} <- Expectations,
+                       M =:= Me],
+             code:ensure_loaded(M),
+             case code:which(M) of
+                 preloaded ->
+                     throw({'refusing to mock preloaded module', M});
+                 non_existing -> ok;
+                 _FNameOrCoverCompiled ->
+                   %%[assert_mocked_function_exists(E) || E <- ModExpectations]
+                   ok
              end,
-             load_mock_module(M, ModExpectations)
+             compile_mock_module(M, ModExpectations)
          end || M <- ExpectationModules],
-    State#state{ mocked_modules = MockedModules }.
-
-%%------------------------------------------------------------------------------
-%% @private
-%%------------------------------------------------------------------------------
-assert_not_mocked(Mod) ->
-    try Mod:module_info(attributes) of
-        Attrs ->
-            case lists:keyfind(?ERLYMOCK_COMPILED, 1 , Attrs) of
-                false ->
-                    ok;
-                _ ->
-                    throw({em_error_module_already_mocked, Mod})
-            end
-    catch
-        _:_ ->
-            ok
+    case em_module_loader:load_modules(MockModules, infinity) of
+        ok ->
+            ok;
+        Error ->
+            throw({'failed to load modules', Error})
     end.
 
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
-load_mock_module(Mod, Expectations) ->
-    MaybeBin = get_cover_compiled_binary(Mod),
+compile_mock_module(Mod, Expectations) ->
+
     ModHeaderSyn = [erl_syntax:attribute(erl_syntax:atom(module),
 					 [erl_syntax:atom(Mod)]),
                     erl_syntax:attribute(erl_syntax:atom(?ERLYMOCK_COMPILED),
@@ -852,22 +824,13 @@ load_mock_module(Mod, Expectations) ->
                  #expectation{ m = M, f = F, a = A } <- Expectations,
                  M == Mod]),
     FunFormsSyn = [mock_fun_syn(Mod, F, A) || {F, A} <- Funs],
-
     {ok, Mod, Code} =
         compile:forms([erl_syntax:revert(F)
                        || F <- ModHeaderSyn ++ FunFormsSyn]),
-    really_delete(Mod),
-    FName = lists:flatten(io_lib:format("~w.beam", [Mod])),
-    {module, _} = code:load_binary(Mod, FName, Code),
-    {Mod, MaybeBin}.
+    FName = lists:flatten(io_lib:format("em_magic_~w.beam", [Mod])),
+    {Mod, FName, Code}.
 
-%%------------------------------------------------------------------------------
-%% @private
-%%------------------------------------------------------------------------------
-really_delete(Mod) ->
-    code:purge(Mod),
-    code:delete(Mod),
-    code:purge(Mod).
+
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -952,28 +915,6 @@ check_args(Args, ArgSpecs, InvokationPid) ->
         E -> E
     end.
 
-%%------------------------------------------------------------------------------
-%% @private
-%%------------------------------------------------------------------------------
--spec get_cover_compiled_binary(atom()) ->
-                                       {just, term()} | nothing.
-get_cover_compiled_binary(Mod) ->
-    case code:which(Mod) of
-        cover_compiled ->
-            case ets:info(cover_binary_code_table) of
-                undefined ->
-                    nothing;
-                _ ->
-                    case ets:lookup(cover_binary_code_table, Mod) of
-                        [Binary] ->
-                            {just, Binary};
-                        _ ->
-                            nothing
-                    end
-            end;
-        _ ->
-            nothing
-    end.
 
 %%------------------------------------------------------------------------------
 %% @private
@@ -1000,17 +941,6 @@ add_invokation_listener(From, Ref, State = #state{strict     = Strict,
             NewE = E#expectation{listeners = [From|Ls]},
             NewStrict = lists:keyreplace(Ref, 2, Strict, NewE),
             {State#state{strict = NewStrict}, []}
-    end.
-%%------------------------------------------------------------------------------
-%% @private
-%%------------------------------------------------------------------------------
-load_original_module(Mod) ->
-    really_delete(Mod),
-    case code:load_file(Mod) of
-        {module, Mod} ->
-            existing_module;
-        _ ->
-            fantasy_module
     end.
 
 %%------------------------------------------------------------------------------

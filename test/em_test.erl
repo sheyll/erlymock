@@ -241,7 +241,7 @@ already_mocked_enqueue_test() ->
     Children
         = [spawn(fun() ->
                        Self = self(),
-                       M = em:new(wait_for_modules),
+                       M = em:new(),
                        em:strict(M, aaaa,bbbb,[],{return, Self}),
                        em:replay(M),
                        ?assertEqual(Self, aaaa:bbbb()),
@@ -251,25 +251,6 @@ already_mocked_enqueue_test() ->
          {Child, Res} ->
              ?assertEqual({Child, ok}, {Child, Res})
      end || Child <- Children].
-
-
-error_module_already_mocked_test() ->
-    process_flag(trap_exit, true),
-    M1 = em:new(),
-    em:strict(M1, xxx,y,[]),
-    em:replay(M1),
-
-    M2 = em:new(nonblocking),
-    em:strict(M2, xxx, y, []),
-    try em:replay(M2) of
-        _NoError ->
-            throw(expected_module_already_mocked_error)
-    catch
-        _C:_E ->
-            pass
-    end,
-    xxx:y(),
-    em:verify(M1).
 
 
 concurrent_mocking_no_deadlock_test() ->
@@ -309,43 +290,6 @@ concurrent_mocking_no_deadlock_test() ->
              ?assertEqual({Child, ok}, {Child, Res})
      end || Child <- C1 ++ C2 ++ C3].
 
-
-concurrent_nonblocking_mocking_no_deadlock_test() ->
-    C1 = [spawn(fun() ->
-                  M = em:new(nonblocking),
-                  em:strict(M, deadlock_test_aaaa, f, []),
-                  em:strict(M, deadlock_test_bbbb, f, []),
-                  em:replay(M),
-                  deadlock_test_aaaa:f(),
-                  deadlock_test_bbbb:f(),
-                  em:verify(M)
-               end) || _ <- lists:seq(1,10)],
-
-    C2 = [spawn(fun() ->
-                  M = em:new(nonblocking),
-                  em:strict(M, deadlock_test_bbbb, f, []),
-                  em:strict(M, deadlock_test_cccc, f, []),
-                  em:replay(M),
-                  deadlock_test_bbbb:f(),
-                  deadlock_test_cccc:f(),
-                  em:verify(M)
-               end) || _ <- lists:seq(1,10)],
-
-    C3 = [spawn(fun() ->
-                  M = em:new(nonblocking),
-                  em:strict(M, deadlock_test_cccc, f, []),
-                  em:strict(M, deadlock_test_aaaa, f, []),
-                  em:replay(M),
-                  deadlock_test_cccc:f(),
-                  deadlock_test_aaaa:f(),
-                  em:verify(M)
-               end) || _ <- lists:seq(1,10)],
-    [begin
-         monitor(process, Child),
-         receive
-             {'DOWN', _, process ,Child, _} ->  ok
-         end
-     end || Child <- C1 ++ C2 ++ C3].
 
 await_no_expectations_test() ->
     M = em:new(),
