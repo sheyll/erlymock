@@ -797,8 +797,7 @@ load_mock_modules(#state{ strict = ExpectationsStrict,
                      throw({'refusing to mock preloaded module', M});
                  non_existing -> ok;
                  _FNameOrCoverCompiled ->
-                   %%[assert_mocked_function_exists(E) || E <- ModExpectations]
-                   ok
+                   [assert_mocked_function_exists(E) || E <- ModExpectations]
              end,
              compile_mock_module(M, ModExpectations)
          end || M <- ExpectationModules],
@@ -949,17 +948,28 @@ add_invokation_listener(From, Ref, State = #state{strict     = Strict,
 %% @private
 %%------------------------------------------------------------------------------
 assert_mocked_function_exists(#expectation{m = Mod, f = Fun, a = Args}) ->
-            case erlang:function_exported(Mod, Fun, length(Args)) of
+    case erlang:function_exported(Mod, module_info, 1) of
+        true ->
+            Attrs = Mod:module_info(attributes),
+            case lists:keyfind(?ERLYMOCK_COMPILED, 1 , Attrs) of
                 false ->
-                    throw({'_______________em_invalid_mock_program_______________',
-                           lists:flatten(
-                             io_lib:format(
-                               "erly_mock: mocked function not exported: ~w:~w/~w",
-                               [Mod, Fun, length(Args)])),
-                           Args});
-                true ->
+                    case erlang:function_exported(Mod, Fun, length(Args)) of
+                        false ->
+                            throw({'_______________em_invalid_mock_program_______________',
+                                   lists:flatten(
+                                     io_lib:format(
+                                       "erly_mock: mocked function not exported: ~w:~w/~w",
+                                       [Mod, Fun, length(Args)])),
+                                   Args});
+                        true ->
+                            ok
+                    end;
+                _ ->
                     ok
-            end.
+            end;
+        false ->
+            ok
+    end.
 
 %%------------------------------------------------------------------------------
 %% @private
