@@ -415,7 +415,7 @@ call_log({group, M, {root, _}}) ->
 %%------------------------------------------------------------------------------
 -spec await_expectations(group()) -> ok.
 await_expectations({group, M, {root, _}}) ->
-    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ Stopped/Await~n", []),
+    dbgLog("Stopped/Await~n", []),
     case gen_statem:call(M, await_expectations, infinity) of
         ok ->
             ok;
@@ -436,7 +436,7 @@ await_expectations({group, M, {root, _}}) ->
 %%------------------------------------------------------------------------------
 -spec verify(group()) -> ok.
 verify({group, M, {root, _}}) ->
-    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ Stopped/Verified~n", []),
+    dbgLog("Stopped/Verified~n", []),
     case gen_statem:call(M, verify, infinity) of
         ok ->
             ok;
@@ -635,7 +635,7 @@ replaying({call, From},
 
 replaying({call, From}, verify, State) ->
     Reason = {invokations_missing, State#state.strict},
-    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ Stopping : ~w~n", [Reason]),
+    dbgLog("Stopping : ~w~n", [Reason]),
     {stop_and_reply, normal, {reply, From, Reason}, State};
 
 replaying({call, From}, {await, H}, State) ->
@@ -683,11 +683,11 @@ no_expectations({call, From},
     end;
 
 no_expectations({call, From}, verify, State) ->
-    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ [~w] Stopping : ~w~n", [self(), [no_expectations, verify]]),
+    dbgLog("[~w] Stopping : ~w~n", [self(), [no_expectations, verify]]),
     {stop_and_reply, normal, {reply, From, ok}, State};
 
 no_expectations({call, From}, await_expectations, State) ->
-    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ [~w] Stopping : ~w~n", [self(), [no_expectations, await_expectations]]),
+    dbgLog("[~w] Stopping : ~w~n", [self(), [no_expectations, await_expectations]]),
     {stop_and_reply, normal, {reply, From, ok}, State};
 
 no_expectations({call, From}, {await, H}, State) ->
@@ -711,11 +711,11 @@ no_expectations({call, From}, Event, _) ->
                     gen_statem:state_callback_result(gen_statem:reply_action()).
 
 deranged({call, From}, verify, State = #state{ error = Error }) ->
-    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ Stopping : ~w~n", [[deranged, verify]]),
+    dbgLog("Stopping : ~w~n", [[deranged, verify]]),
     {stop_and_reply, normal, {reply, From, Error}, State};
 
 deranged({call, From}, await_expectations, State = #state{ error = Error }) ->
-    io:format(standard_error, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ Stopping : ~w~n", [[deranged, await_expectations]]),
+    dbgLog("Stopping : ~w~n", [[deranged, await_expectations]]),
     {stop_and_reply, normal, {reply, From, Error}, State};
 
 deranged({call, From}, {await, _}, _) ->
@@ -1125,3 +1125,13 @@ enter_deranged(ReplyActions, What, State = #state{ error  = no_error,
                 #expectation{ listeners = Ls } <- Strict,
                 L <- Ls]
         ++ ReplyActions]}.
+
+%%------------------------------------------------------------------------------
+%% @private
+%%------------------------------------------------------------------------------
+-ifdef(EM_DEBUG).
+dbgLog(Fmt,Args) ->
+    io:format(standard_error, "+++++++++++   EM   +++++++++++ " ++ Fmt, Args).
+-else.
+dbgLog(_Fmt,_Args) -> ok.
+-endif.

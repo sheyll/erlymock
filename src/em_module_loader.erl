@@ -419,7 +419,11 @@ do_load_atomically(Mods, ErrMsg) ->
 %%------------------------------------------------------------------------------
 %% @private
 %%------------------------------------------------------------------------------
+-ifdef(EM_DEBUG).
 dbgLog(Fmt,Args) ->
     io:format(standard_error,
               "+++++++++++++EM_MODULE_LOADER+++++++++++++ " ++ Fmt,
               Args).
+-else.
+dbgLog(_Fmt, _Args) -> ok.
+-endif.
