@@ -7,3 +7,6 @@ _build/
 rebar.lock
 TEST-*.xml
 /.markdown-preview.html
+.rebar3/
+*.iml
+.idea/

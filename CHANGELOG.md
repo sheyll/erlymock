@@ -1,5 +1,9 @@
 # Changelog
 
+## Version 7.2.3
+
+* Fix cover compilation
+
 ## Version 7.2.2
 
 * Simplify the internal module loading
