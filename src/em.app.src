@@ -7,7 +7,16 @@
    {applications, [kernel, stdlib]},
    {env, []},
    {start_phases, []},
-   {maintainers, ["Sven Heyll"]},
    {licenses, ["MIT"]},
+   {files, [ "CHANGELOG.md"
+           , "LICENSE"
+           , "Makefile"
+           , "README.md"
+           , "rebar.config"
+           , "rebar.lock"
+           , ".gitignore"
+           , "include/*"
+           , "src/*"
+           ]},
    {links, [{"Github", "https://github.com/sheyll/erlymock"}]}
    ]}.
