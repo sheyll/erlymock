@@ -363,9 +363,9 @@ backup_module(Mod) ->
                     nothing;
                 _ ->
                     case ets:lookup(cover_binary_code_table, Mod) of
-                        [ObjCode] ->
+                        [{Mod, ObjCode}] ->
                             dbgLog("Saving: <cover> ~w~n", [Mod]),
-                            {just, {Mod, cover_compiled, ObjCode}};
+                            {just, {Mod, atom_to_list(Mod) ++ ".erl", ObjCode}};
                         _ ->
                             nothing
                     end
