@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Sven Heyll <sven@wega.lbaum.eu>
-%%% @copyright (C) 2018, Sven Heyll
+%%% @copyright (C) 2018,2021 Sven Heyll
 %%% @doc
 %%% <b>INTERNAL MODULE</b>
 %%% Load modules on behalf of the {@link em} module.
@@ -57,7 +57,7 @@
 %%% the brutal `kill' in the strict callback.
 %%%
 %%% @end
-%%% Created : 19 Feb 2018 by Sven Heyll <sven@wega.lbaum.eu>
+%%% Created : 19 Feb 2018 by Sven Heyll <sven.heyll@gmail.com>
 %%%-------------------------------------------------------------------
 -module(em_module_loader).
 

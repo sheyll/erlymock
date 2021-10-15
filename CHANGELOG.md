@@ -1,5 +1,10 @@
 # Changelog
 
+## Version 7.2.{4,5}
+
+* Try to fix nixpkgs based `hexBuild` errors be
+  replacing '-include_lib' with '-include'
+
 ## Version 7.2.3
 
 * Fix cover compilation

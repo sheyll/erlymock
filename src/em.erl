@@ -1,6 +1,6 @@
 %%%-----------------------------------------------------------------------------
 %%% @author Sven Heyll <sven.heyll@gmail.com>
-%%% @copyright (C) 2011-2017 Sven Heyll
+%%% @copyright (C) 2011-2021 Sven Heyll
 %%% @doc
 %%% The module name 'em' stands for 'Erly Mock'.
 %%%
@@ -63,7 +63,7 @@
 %%%
 %%% @end
 %%%-----------------------------------------------------------------------------
-%%% Copyright (c) 2011-2018 Sven Heyll
+%%% Copyright (c) 2011-2021 Sven Heyll
 %%%
 %%% Permission is hereby granted, free of charge, to any person obtaining a copy
 %%% of this software and associated documentation files (the "Software"), to
@@ -124,7 +124,7 @@
 
 -export_type([group/0, group_tag/0, timeout_millis/0]).
 
--include_lib("em/include/em.hrl").
+-include("em.hrl").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% important types
