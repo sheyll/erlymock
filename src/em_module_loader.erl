@@ -76,7 +76,7 @@
 -export([no_modules_loaded/3, modules_loaded/3,
          module_loading_disabled/3, deranged/3]).
 
--include_lib("em/include/em.hrl").
+-include("em.hrl").
 
 -define(SERVER, ?MODULE).
 
