@@ -760,13 +760,13 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 -spec invoke(M :: term(), Mod :: term(), Fun :: fun(), Args :: list()) ->
                     {Value :: term()}.
 invoke(M, Mod, Fun, Args) ->
-    Trace = erlang:get_stacktrace(),
-    try io:format("~nEM: ~w:~w ~p",[Mod,Fun, Args]) catch _:_ -> ok end,
+    {current_stacktrace, Trace} = erlang:process_info(self(), current_stacktrace),
+    try io:format("~nEM: ~w:~w ~p", [Mod, Fun, Args]) catch _:_ -> ok end,
     Rv = case gen_statem:call(M, {invokation, Mod, Fun, Args, self()}, infinity) of
              {return, Value} ->
                  Value;
              {'$em_error' , WTF} ->
-                 (catch io:format(" *ERROR* ->  ~p~nAT: ~p~n~n",[WTF, Trace])),
+                 (catch io:format(" *ERROR* ->  ~p~nAT: ~p~n~n", [WTF, Trace])),
                  exit({mock_error, WTF});
              {function, F} ->
                  F(Args)
