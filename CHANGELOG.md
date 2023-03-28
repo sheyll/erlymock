@@ -1,6 +1,6 @@
 # Changelog
 
-## Version 7.2.6
+## Version 7.3.0
 
 * Update stacktrace generation
 
