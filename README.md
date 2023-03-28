@@ -36,4 +36,4 @@
 
 Add this to your `rebar.config`:
 
-    {em, "7.2.5"}
+    {em, "7.2.6"}

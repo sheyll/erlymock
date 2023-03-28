@@ -1,5 +1,9 @@
 # Changelog
 
+## Version 7.2.6
+
+* Update stacktrace generation
+
 ## Version 7.2.{4,5}
 
 * Try to fix nixpkgs based `hexBuild` errors be
