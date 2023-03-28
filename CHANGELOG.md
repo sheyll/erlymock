@@ -1,5 +1,10 @@
 # Changelog
 
+## Version 7.3.1
+
+* Update rebar3
+* Set the documentation provider for hex.pm to edoc
+
 ## Version 7.3.0
 
 * Update stacktrace generation

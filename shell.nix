@@ -12,6 +12,7 @@
       gcc
       coreutils
       vim
+      which
     ];
   runScript = ''
     ${run}
